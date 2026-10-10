@@ -15,3 +15,6 @@ dist/
 
 # Uploaded files
 backend/uploads/
+# Models and evaluation outputs
+models/
+backend/eval_results/
