@@ -37,7 +37,7 @@ export default function App() {
   if (OPEN[path]) {
     if (user) return <Redirect to={home(user)} />;
     const Page = OPEN[path];
-    return <Page />;
+    return <Page key={path} />; // a fresh page per URL, so /gg/alerts and /pp/alerts never share state
   }
   if (!user) return <Redirect to="/login" />;
   if (path.startsWith("/admin"))
@@ -51,14 +51,21 @@ export default function App() {
     "/gg/feed": Feed,
     "/gg/report": ReportForm,
     "/gg/pinned": Pinned,
-    "/alerts": Alerts,
-    "/profile": Profile,
-    "/profile/reports": MyReports,
-    "/profile/areas": EditAreas,
+    "/gg/alerts": Alerts,
+    "/pp/alerts": Alerts,
+    "/gg/profile": Profile,
+    "/pp/profile": Profile,
+    "/gg/profile/reports": MyReports,
+    "/pp/profile/reports": MyReports,
+    "/gg/profile/areas": EditAreas,
+    "/pp/profile/areas": EditAreas,
     "/pp": PriceDashboard,
     "/pp/explore": Explore,
     "/pp/report": PriceReport,
   };
+  // Old links (/alerts, /profile/…) go to the same page in the person's preferred module.
+  if (path === "/alerts" || path === "/profile" || path.startsWith("/profile/"))
+    return <Redirect to={`/${user.preferred_module === "price_patrol" ? "pp" : "gg"}${path}`} />;
   if (path === "/gg/dashboard")
     return (
       <Suspense fallback={<div className="p-6"><Skeleton className="h-96 w-full" /></div>}>
@@ -67,5 +74,5 @@ export default function App() {
     );
   const Page = routes[path];
   if (!Page) return <Redirect to={home(user)} />;
-  return <Page />;
+  return <Page key={path} />; // a fresh page per URL, so /gg/alerts and /pp/alerts never share state
 }

@@ -23,6 +23,11 @@ export function RouterProvider({ children }) {
 
 export const useRoute = () => useContext(RouterCtx);
 
+// Alerts and Profile exist once per module (/gg/alerts, /pp/alerts, …), so the page always knows which module the
+// person is in from the URL, and a reload keeps them there.
+export const moduleFromPath = (path) => (path.startsWith("/pp") ? "pp" : "gg");
+export const MODULE_KEY = { gg: "green_guard", pp: "price_patrol" };
+
 export function navigate(to, { replace = false } = {}) {
   const go = () => {
     history[replace ? "replaceState" : "pushState"](null, "", to);

@@ -101,7 +101,7 @@ It asks for the password twice. Admin login always asks for a code; in `DEV_MODE
 docker compose exec db createdb -U civicpulse_owner civicpulse_test
 docker compose exec -e TEST_DATABASE_URL=postgresql+psycopg2://civicpulse_owner:<OWNER_DB_PASSWORD>@db:5432/civicpulse_test api python -m pytest -q
 ```
-Expected: 92 passed (54 scoring + 38 API/security). The test database is wiped on every run; never point it at `civicpulse`.
+Expected: 93 passed (54 scoring + 39 API/security). The test database is wiped on every run; never point it at `civicpulse`.
 Without `TEST_DATABASE_URL` only the 54 scoring tests run.
 
 ## 9. Optional: GPU worker

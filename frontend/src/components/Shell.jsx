@@ -18,15 +18,15 @@ function navItems(module) {
       { to: "/pp", label: "Prices", desk: "Price Dashboard", icon: "tag" },
       { to: "/pp/explore", label: "Explore", desk: "Explore Prices", icon: "search" },
       { to: "/pp/report", label: "Report", desk: "Report a Price", icon: "plus", raised: true },
-      { to: "/alerts", label: "Alerts", icon: "bell" },
-      { to: "/profile", label: "Profile", icon: "user" },
+      { to: "/pp/alerts", label: "Alerts", icon: "bell" },
+      { to: "/pp/profile", label: "Profile", icon: "user" },
     ];
   return [
     { to: "/gg/dashboard", label: "Dashboard", icon: "map" },
     { to: "/gg/feed", label: "Feed", icon: "feed" },
     { to: "/gg/report", label: "Report", icon: "plus", raised: true },
-    { to: "/alerts", label: "Alerts", icon: "bell" },
-    { to: "/profile", label: "Profile", icon: "user" },
+    { to: "/gg/alerts", label: "Alerts", icon: "bell" },
+    { to: "/gg/profile", label: "Profile", icon: "user" },
   ];
 }
 
@@ -63,8 +63,8 @@ function DesktopBar({ module, items, active, badge }) {
         <nav aria-label="Main" className={cx("flex flex-1 items-center gap-1", module === "pp" ? "ml-4" : "justify-center")}>
           <div className={cx("flex items-center gap-1", module === "pp" && "rounded-2xl border border-line/80 p-1")}>
             {items.map((it) =>
-              it.to === "/profile" && module === "gg" ? (
-                <Link key={it.to} to="/profile" aria-current={active(it.to) ? "page" : undefined} aria-label="Profile" className={cx("ml-1 grid size-11 place-items-center rounded-full", active(it.to) ? "bg-primary text-white" : "bg-soft text-primary")}>
+              it.icon === "user" && module === "gg" ? (
+                <Link key={it.to} to={it.to} aria-current={active(it.to) ? "page" : undefined} aria-label="Profile" className={cx("ml-1 grid size-11 place-items-center rounded-full", active(it.to) ? "bg-primary text-white" : "bg-soft text-primary")}>
                   <Icon name="user" className="size-5" />
                 </Link>
               ) : (
@@ -151,7 +151,7 @@ export function Shell({ module, children, wide, title, bare }) {
   const { path } = useRoute();
   const { unread } = useApp();
   const items = navItems(module);
-  const badge = (unread?.alerts || 0) + (unread?.notifications || 0);
+  const badge = (unread?.[module]?.alerts || 0) + (unread?.[module]?.notifications || 0);
   const active = (to) => (to === "/pp" ? path === "/pp" : path === to || path.startsWith(to + "/"));
   return (
     <ModuleProvider value={module}>
