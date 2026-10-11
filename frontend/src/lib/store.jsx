@@ -1,6 +1,7 @@
 // Session and app-wide state: the signed-in user, toasts, online status and live notification counts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, clearPhotoCache, onToken, refresh, setToken } from "./api.js";
+import { api, clearPhotoCache, lastLoadedAt, onToken, refresh, setToken } from "./api.js";
+import { fmtTime } from "./format.js";
 import { openStream } from "./stream.js";
 
 const AppCtx = createContext(null);
@@ -11,6 +12,7 @@ export function AppProvider({ children }) {
   const [booting, setBooting] = useState(true);
   const [toasts, setToasts] = useState([]);
   const [online, setOnline] = useState(navigator.onLine);
+  const [offlineSince, setOfflineSince] = useState(null);
   const [unread, setUnread] = useState({ alerts: 0, notifications: 0 });
   const [live, setLive] = useState(null); // last live notification (drives the ripple on the dashboard)
   const toastId = useRef(0);
@@ -37,7 +39,11 @@ export function AppProvider({ children }) {
       if (!t) setUser(null);
     });
     const up = () => setOnline(true);
-    const down = () => setOnline(false);
+    const down = () => {
+      const t = lastLoadedAt();
+      setOfflineSince(t ? fmtTime(t.toISOString()) : null);
+      setOnline(false);
+    };
     window.addEventListener("online", up);
     window.addEventListener("offline", down);
     return () => {
@@ -88,8 +94,8 @@ export function AppProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, setUser, loadMe, booting, signIn, signOut, toast, toasts, online, unread, refreshUnread, live }),
-    [user, loadMe, booting, signIn, signOut, toast, toasts, online, unread, refreshUnread, live],
+    () => ({ user, setUser, loadMe, booting, signIn, signOut, toast, toasts, online, offlineSince, unread, refreshUnread, live }),
+    [user, loadMe, booting, signIn, signOut, toast, toasts, online, offlineSince, unread, refreshUnread, live],
   );
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

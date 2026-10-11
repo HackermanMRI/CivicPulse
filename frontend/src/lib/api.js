@@ -2,6 +2,8 @@
 // read (spec §8). Every request carries the random device id (only its hash is stored on the server, C11).
 
 let accessToken = null;
+let lastLoaded = null; // time of the last successful API answer (the offline banner shows it)
+export const lastLoadedAt = () => lastLoaded;
 let refreshing = null;
 const listeners = new Set();
 
@@ -100,6 +102,7 @@ export async function api(path, { method = "GET", body, form, query, retry = tru
     data = null;
   }
   if (!res.ok) throw new ApiError(res.status, message(data, res.status), data);
+  if (method === "GET") lastLoaded = new Date();
   return data;
 }
 

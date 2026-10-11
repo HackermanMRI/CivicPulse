@@ -8,7 +8,7 @@ with the output of `docker compose logs --tail 80 api worker`.
 - [ ] `curl.exe http://127.0.0.1:8000/api/health` → `"database": true`, `"migration": "0001"`, `"tables": 36`, `"categories": 7`.
 - [ ] `docker compose logs worker` shows `Listening on civicpulse`.
 - [ ] https://localhost opens the login page with no certificate warning.
-- [ ] Tests: 86 passed (RUN.md §8).
+- [ ] Tests: 92 passed (RUN.md §8).
 
 ## Accounts (as a new user, on a phone)
 - [ ] Sign-up: phone → 6-digit code shown on screen (DEV_MODE) → name + password → 3 permissions → areas → lands on the module picker.
@@ -17,17 +17,17 @@ with the output of `docker compose logs --tail 80 api worker`.
 - [ ] Forgot password works with a new code.
 
 ## Green Guard (log in as 01700000001)
-- [ ] Feed shows DEMO cards with photos; unvoted cards say "Vote to see how credible this report is".
-- [ ] Open an unvoted card: no status or scores. Vote "Far away" + "Issue confirmed": results appear (status chip, credibility, uncertainty, vote bars).
+- [ ] Feed matches the mockup: "Pinned Reports" bar on top; unvoted cards show the reporter's name, a locked "Reputation after vote" pill, the category band, text, photo and three buttons (Verify on spot / nearby / from far away).
+- [ ] Open an unvoted card: no status, scores or reputation. Tap "Verify from far away" → "Issue confirmed" → "Send vote": the card now shows credibility/uncertainty bars, the status chip, reputation and the On spot / Nearby / Far away ✓✕ tiles.
 - [ ] "Why this score?" lists the 7 components with explanations; text/photo say "DEMO synthetic score".
-- [ ] Pin a card; it appears under Profile → Pinned.
-- [ ] Report an issue: category → description → camera photo → location → "Report sent" pulse. A second report the same day is refused.
+- [ ] Pin a card; the count on the "Pinned Reports" bar goes up and the card is listed there.
+- [ ] Report an issue in 5 steps: category → location (GPS ± m and detected ward) → camera → photo and text (retake counter) → review → "Report sent" pulse. A second report the same day is refused.
 - [ ] The new report gets a status within a minute (worker). Its text/image are "unavailable" until models are installed.
 - [ ] On a second phone (01700000003) the "new report in your locality" alert appears without reloading (live SSE).
 - [ ] On-the-spot vote: GPS + camera; the photo shows under "On-the-spot photos" after voting.
 
 ## Dashboard
-- [ ] KPIs filled, DEMO banner visible.
+- [ ] Filter bar (7 days / 30 days / This year, Category, Status, Ward, Show resolved) changes the KPIs, map, charts and ward table. KPIs filled, DEMO banner visible.
 - [ ] Map shows markers (and the base map if `tiles/pilot.pmtiles` exists); heatmap toggle works; 3D shows columns.
 - [ ] Hotspots list has entries; "Show" moves the map; Emerging issues lists a waterlogging alert in Chashara.
 - [ ] Time-lapse plays and stops.
@@ -40,7 +40,7 @@ with the output of `docker compose logs --tail 80 api worker`.
 
 ## Admin (after `create-admin`)
 - [ ] Login asks for a code every time.
-- [ ] Overview counts; Reports queue → open a report: displayed and judging component tables, scoring history.
+- [ ] Dark sidebar with badges (Collusion alerts, Report review). Report review: list on the left, detail on the right with the Displayed / Judging component tables and the scoring history.
 - [ ] Hide without a reason is impossible; hide with a reason works and appears in the Audit log; restore works.
 - [ ] Alerts: open the pair-agreement alert, mark it solved with a note.
 - [ ] Accounts: suspend a DEMO user → that user can no longer log in; reinstate.
