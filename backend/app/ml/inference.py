@@ -128,6 +128,21 @@ class ImageScorer:
         return Probability(float(probs[self.codes.index(category_code)]), len(self.codes) + 1, self.version)
 
 
+def models_ready(params: Params) -> bool:
+    """True only when both model folders hold safetensors weights and torch can be imported.
+    The API image has no torch, so there this is always False and the worker does the scoring."""
+    for name in (params.ml.clip_model, params.ml.text_encoder):
+        if not any(local_dir(name).rglob("*.safetensors")):
+            return False
+    try:
+        import torch  # noqa: F401
+        import sentence_transformers  # noqa: F401
+        import transformers  # noqa: F401
+    except ImportError:
+        return False
+    return True
+
+
 _SCORERS: dict[tuple[str, str], object] = {}
 
 

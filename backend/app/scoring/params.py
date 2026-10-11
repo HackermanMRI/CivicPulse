@@ -143,6 +143,7 @@ class HotspotsCfg(_Strict):
     min_reports: int = Field(ge=1)
     min_users: int = Field(ge=1)
     severity_weights: SeverityWeights
+    score_bands: tuple[float, float] = (33.0, 66.0)   # open parameter B4: low < 33 ≤ medium < 66 ≤ high
 
 
 class AlertsCfg(_Strict):
@@ -185,6 +186,7 @@ class UploadsCfg(_Strict):
     max_bytes: int = Field(gt=0)
     max_side_px: int = Field(gt=0)
     max_pixels: int = Field(gt=0)
+    phash_threshold: int = Field(default=6, ge=0, le=32)
 
 
 class Category(_Strict):

@@ -2,7 +2,8 @@
 from __future__ import annotations
 
 from geoalchemy2 import Geography, Geometry
-from sqlalchemy import ARRAY, Boolean, CheckConstraint, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, Numeric, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base
@@ -24,6 +25,7 @@ class Ward(Base):
     fallback_radius_m: Mapped[int] = mapped_column(Integer, default=300, nullable=False)
     source: Mapped[str | None] = mapped_column(Text)
     verified_by: Mapped[str | None] = mapped_column(Text)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class Market(Base):
@@ -37,6 +39,7 @@ class Market(Base):
     radius_m: Mapped[int] = mapped_column(Integer, default=150, nullable=False)
     source: Mapped[str] = mapped_column(MARKET_SOURCE, nullable=False)
     verified: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
 
 class Category(Base):
@@ -67,5 +70,6 @@ class Commodity(Base):
     variant: Mapped[str] = mapped_column(Text, nullable=False)
     unit: Mapped[str] = mapped_column(UNIT, nullable=False)
     active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    is_demo: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
 
     __table_args__ = (UniqueConstraint("name_en", "variant", "unit", name="uq_commodity"),)

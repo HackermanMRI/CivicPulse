@@ -4,6 +4,10 @@
 **/node_modules
 **/.git
 **/eval_results
+**/dist
 models
 Files
+exports
+tiles
+docker/certs
 .env

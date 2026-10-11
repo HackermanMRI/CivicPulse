@@ -1,0 +1,12 @@
+# Optional: run the worker on the NVIDIA GPU (GTX 1660 Super). Use together with the main file:
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d --build
+# and set TORCH_INDEX=https://download.pytorch.org/whl/cu124 and DEVICE=cuda in .env.
+services:
+  worker:
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

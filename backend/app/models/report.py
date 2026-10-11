@@ -6,10 +6,10 @@ from datetime import date, datetime
 
 from geoalchemy2 import Geography
 from sqlalchemy import (
-    ARRAY, BigInteger, Boolean, CheckConstraint, Date, Enum, Float, ForeignKey, Index, Integer, Numeric,
+    Boolean, CheckConstraint, Date, Enum, Float, ForeignKey, Index, Integer, Numeric,
     PrimaryKeyConstraint, SmallInteger, String, Text, text,
 )
-from sqlalchemy.dialects.postgresql import BIT, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, BIT, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, ts, uuid_pk
@@ -26,8 +26,8 @@ VOTE_MODE = Enum("on_spot", "same_ward", "far_away", name="vote_mode")
 ABUSE_STATE = Enum("open", "reviewed", name="abuse_state")
 
 
-def _uuid_fk(target: str, nullable: bool = False, **kw):
-    return mapped_column(UUID(as_uuid=True), ForeignKey(target, **kw), nullable=nullable)
+def _uuid_fk(target: str, nullable: bool = False, index: bool = False, **fk_kw):
+    return mapped_column(UUID(as_uuid=True), ForeignKey(target, **fk_kw), nullable=nullable, index=index)
 
 
 class CaptureToken(Base):
@@ -89,7 +89,7 @@ class Report(Base):
     visibility: Mapped[str] = mapped_column(VISIBILITY, default="visible", nullable=False)
     visibility_reason: Mapped[str | None] = mapped_column(Text)
     visibility_changed_at: Mapped[datetime | None] = ts()
-    is_seed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    is_seed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # DEMO data (N13)
 
     __table_args__ = (
         CheckConstraint("alpha >= 1 AND beta >= 1", name="ck_reports_beta_prior"),
