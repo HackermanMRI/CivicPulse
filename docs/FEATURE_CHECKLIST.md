@@ -1,12 +1,13 @@
 # CivicPulse feature checklist
 
 Statuses: NOT_STARTED · IN_PROGRESS · IMPLEMENTED · TESTED · BLOCKED. TESTED means it works end to end (UI → API → DB → back), not just unit tests.
-Sources: final spec, UI decisions, repo audit of 43e50b0. Last updated: Sun 11 Oct 2026, 6:45 AM (Asia/Dhaka), after batch 2.
+Sources: final spec, UI decisions, repo audit of 43e50b0. Last updated: Sun 11 Oct 2026, 7:30 AM (Asia/Dhaka), after batch 3. "Written, not run" = code is in the repo but has not run on the laptop yet.
 
 ## Findings that need a decision
 | ID | Finding | Evidence | Options |
 |---|---|---|---|
-| F-1 | With profile A, votes can move a report by **at most one evidence unit** (F16 squeezes every vote into one community score with weight 1), while plausible text, photo, GPS and timing add about 3.7 units. A fake report that *looks* normal therefore stays Supported even when on-the-spot voters disagree, and it can almost never reach Not Supported (needs c < 0.30). Reporters who post such fakes never lose reputation. | E5 simulation: exploiters keep reputation ≈ 0.93 after turning fake; 96% of their fakes are still shown as Supported. Raising the community weight to 5 only lowers that to 77%. | (a) Keep the rule and report it as a limitation. (b) Count weighted votes directly as evidence (α += A, β += D), the textbook Beta-reputation form. (c) Let profile B decide (results chapter only). Not changed: this is an approved rule. |
+| F-1 | **DECIDED 11 Oct 2026: option (b), implemented** (`evidence.community_mode: direct`). Before: with profile A, votes could move a report by **at most one evidence unit** (F16 squeezes every vote into one community score with weight 1), while plausible text, photo, GPS and timing add about 3.7 units. A fake report that *looks* normal therefore stays Supported even when on-the-spot voters disagree, and it can almost never reach Not Supported (needs c < 0.30). Reporters who post such fakes never lose reputation. | E5 simulation: exploiters keep reputation ≈ 0.93 after turning fake; 96% of their fakes are still shown as Supported. Raising the community weight to 5 only lowers that to 77%. | (a) Keep the rule and report it as a limitation. (b) Count weighted votes directly as evidence (α += A, β += D), the textbook Beta-reputation form. (c) Let profile B decide (results chapter only). Not changed: this is an approved rule. |
+| F-3 | Even with F-1, a fake report with normal-looking content almost never reaches Not Supported (needs c < 0.30), so people who post such fakes rarely lose reputation. Fakes shown as Supported fell from 96% to 81% in E5. | E5 with direct votes | (a) Keep and report as a limitation. (b) Give the reporter Δβ when the judging status is Uncertain *because of conflict* (rule 1). Not changed: approved rule. |
 | F-2 | Collusion signals (b) and (c) are percentiles. With few voter pairs, ties make many pairs count as "top 5%", so the admin queue may get false alarms in the pilot. | Code review | Keep as approved (alerts only, no penalty) and note it in the thesis |
 
 ## 0. Housekeeping
@@ -18,36 +19,36 @@ Sources: final spec, UI decisions, repo audit of 43e50b0. Last updated: Sun 11 O
 ## 1. Infrastructure
 | ID | Feature | Where | Status |
 |---|---|---|---|
-| INF-1 | Docker Compose: nginx, api, worker, scheduler, db (PostGIS), redis | `docker-compose.yml` | NOT_STARTED |
+| INF-1 | Docker Compose: nginx, api, worker, scheduler, db (PostGIS), redis | `docker-compose.yml` | IN_PROGRESS: db, redis, api written, not run; nginx/worker/scheduler next |
 | INF-2 | nginx: mkcert HTTPS, `/api` proxy, SSE without buffering, upload limit, rate limit, CSP and headers | `nginx/` | NOT_STARTED |
 | INF-3 | One config file, `yaml.safe_load`, strict validation, config hash | `config/civicpulse.yaml`, `app/scoring/params.py` | IN_PROGRESS: loader and validation unit-tested; storing the hash with runs needs the DB |
-| INF-4 | Alembic migration from the Day 1 schema | `backend/alembic/` | NOT_STARTED |
-| INF-5 | `.env` + `.env.example`, no secrets in code | repo root | NOT_STARTED |
+| INF-4 | Alembic migration from the Day 1 schema | `backend/alembic/` | IMPLEMENTED (written, not run) |
+| INF-5 | `.env` + `.env.example`, no secrets in code | repo root | IMPLEMENTED (settings refuse to start without real secrets) |
 | INF-6 | `DEVICE=cuda|cpu` with CPU fallback | `app/ml/inference.py` | IMPLEMENTED (not run: needs laptop) |
 | INF-7 | Health endpoint with PostGIS version | `routers/health.py` | IMPLEMENTED (Day 1, not re-verified) |
 | INF-8 | Non-root containers, pinned versions, audits | Dockerfiles | NOT_STARTED |
 | INF-9 | Self-hosted PMTiles and Anek Bangla fonts | `nginx/static/` | NOT_STARTED |
-| INF-10 | CLI: create-admin, import-labels, export-for-labelling, load-demo-seed | `app/cli.py` | NOT_STARTED |
+| INF-10 | CLI: create-admin, import-labels, export-for-labelling, load-demo-seed | `app/cli.py` | IN_PROGRESS: seed-config and create-admin written, not run |
 | INF-11 | Scheduler for daily and hourly jobs | `worker/` | NOT_STARTED |
 
 ## 2. Database
 | ID | Tables | Status |
 |---|---|---|
-| DB-1 | users, user_addresses, devices, otp_codes, refresh_tokens, consents | NOT_STARTED |
-| DB-2 | wards, markets, categories, commodities | NOT_STARTED |
-| DB-3 | capture_tokens (fixed capture time), events, reports, price_details, evidence | NOT_STARTED |
-| DB-4 | scoring_runs, trust_scores (row per component and view) | NOT_STARTED |
-| DB-5 | votes, saved_posts, reputation_events | NOT_STARTED |
-| DB-6 | verified_prices, reference_prices, hotspots, alerts, live_days, notifications, price_alert_watch | NOT_STARTED |
-| DB-7 | voter_pairs, collusion_alerts, audit_log (+ trigger), abuse_reports | NOT_STARTED |
-| DB-8 | label_import_batches, labels, label_final | NOT_STARTED |
-| DB-9 | Spec indexes | NOT_STARTED |
+| DB-1 | users, user_addresses, devices, otp_codes, refresh_tokens, consents | IMPLEMENTED (written, not run) |
+| DB-2 | wards, markets, categories, commodities | IMPLEMENTED (written, not run) |
+| DB-3 | capture_tokens (fixed capture time), events, reports, price_details, evidence | IMPLEMENTED (written, not run) |
+| DB-4 | scoring_runs, trust_scores (row per component and view) | IMPLEMENTED (written, not run) |
+| DB-5 | votes, saved_posts, reputation_events | IMPLEMENTED (written, not run) |
+| DB-6 | verified_prices, reference_prices, hotspots, alerts, live_days, notifications, price_alert_watch | IMPLEMENTED (written, not run) |
+| DB-7 | voter_pairs, collusion_alerts, audit_log (+ trigger), abuse_reports | IMPLEMENTED (written, not run) |
+| DB-8 | label_import_batches, labels, label_final | IMPLEMENTED (written, not run) |
+| DB-9 | Spec indexes | IMPLEMENTED (written, not run) |
 
 ## 3. Accounts and security
 | ID | Feature | Status |
 |---|---|---|
 | AUTH-1 | Sign-up with mock OTP (6 digits, hashed, 5 min, 5 tries, rate-limited, shown only in DEV_MODE) | NOT_STARTED |
-| AUTH-2 | argon2id passwords | NOT_STARTED |
+| AUTH-2 | argon2id passwords | IMPLEMENTED (written, not run) |
 | AUTH-3 | Login with one error message for both failure cases; failed logins audited | NOT_STARTED |
 | AUTH-4 | JWT 15 min; refresh rotation with family revoke; HttpOnly cookie; stay logged in 30 days | NOT_STARTED |
 | AUTH-5 | Logout | NOT_STARTED |
@@ -199,5 +200,5 @@ All of this is pure maths in `backend/app/scoring/`, unit-tested here (52 tests 
 ## 15. Tests
 | ID | Feature | Status |
 |---|---|---|
-| T-1 | Formula unit tests | IN_PROGRESS: 52 pass |
+| T-1 | Formula unit tests | IN_PROGRESS: 54 pass |
 | T-2 … T-5 | API, security, phone E2E, final audit | NOT_STARTED |

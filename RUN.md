@@ -14,7 +14,7 @@
    docker compose ps
    curl.exe http://127.0.0.1:8000/api/health
    ```
-   Expected: `"database": true`, `"migration": "0001"`, `"tables": 34` (33 app tables + PostGIS `spatial_ref_sys`) and `"categories": 7`.
+   Expected: `"database": true`, `"migration": "0001"`, `"tables": 36` (34 app tables + `alembic_version` + PostGIS `spatial_ref_sys`) and `"categories": 7`.
 4. Run the tests inside the container:
    ```powershell
    docker compose run --rm api python -m pytest -q
