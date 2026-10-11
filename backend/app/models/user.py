@@ -29,6 +29,7 @@ class User(Base):
     role: Mapped[str] = mapped_column(ROLE, default="citizen", nullable=False)
     state: Mapped[str] = mapped_column(USER_STATE, default="active", nullable=False)
     preferred_module: Mapped[str | None] = mapped_column(String(20))    # green_guard | price_patrol
+    is_seed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # DEMO account
     suspended_at: Mapped[datetime | None] = ts()
     created_at: Mapped[datetime] = created_at()
     deleted_at: Mapped[datetime | None] = ts()

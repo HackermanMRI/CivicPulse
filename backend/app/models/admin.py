@@ -4,8 +4,8 @@ from __future__ import annotations
 import uuid
 from datetime import datetime
 
-from sqlalchemy import ARRAY, BigInteger, CheckConstraint, Enum, Float, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy import BigInteger, CheckConstraint, Enum, Float, ForeignKey, Index, Integer, PrimaryKeyConstraint, String, Text, UniqueConstraint
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, ts, uuid_pk

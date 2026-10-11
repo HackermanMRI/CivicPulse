@@ -14,10 +14,14 @@ class Settings(BaseSettings):
     JWT_ISSUER: str = "civicpulse"
     JWT_AUDIENCE: str = "civicpulse-app"
     DEV_MODE: bool = False                          # shows the mock OTP on screen (Q32); never on in production
-    FRONTEND_ORIGIN: str = "https://localhost"
+    FRONTEND_ORIGIN: str = "https://localhost"     # comma-separated list, e.g. "https://localhost,https://192.168.0.105"
     UPLOAD_DIR: str = "/data/uploads"
     CONFIG_PATH: str | None = None                  # defaults to config/civicpulse.yaml
     IP_HASH_SALT: str = Field(min_length=16)
+    JOBS_INLINE: bool = False                       # run worker jobs inside the request (tests, or no worker running)
+    COOKIE_SECURE: bool = True                      # refresh cookie only over HTTPS (localhost counts as secure in browsers)
+    MODELS_DIR: str = "/models"
+    STATIC_DIR: str | None = None                   # serve the built frontend from the API (local runs without nginx)
 
 
 @lru_cache

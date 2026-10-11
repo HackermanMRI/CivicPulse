@@ -6,10 +6,10 @@ from datetime import date, datetime
 
 from geoalchemy2 import Geography, Geometry
 from sqlalchemy import (
-    ARRAY, Boolean, Date, Enum, Float, ForeignKey, Index, Integer, Numeric, PrimaryKeyConstraint, Text,
+    Boolean, Date, Enum, Float, ForeignKey, Index, Integer, Numeric, PrimaryKeyConstraint, Text,
     UniqueConstraint, text,
 )
-from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, ts, uuid_pk

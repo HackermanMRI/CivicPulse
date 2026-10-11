@@ -4,7 +4,6 @@ Results are synthetic and must always be reported separately from pilot results.
 """
 from __future__ import annotations
 
-import dataclasses
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 

@@ -77,6 +77,7 @@ hotspots:
   min_reports: 3
   min_users: 2
   severity_weights: {impact: 0.5, extent: 0.3, urgency: 0.2}
+  score_bands: [33, 66]            # open parameter B4: display bands low / medium / high on the 0–100 score
 
 alerts:
   baseline_days: 28
@@ -113,6 +114,7 @@ uploads:
   max_bytes: 8388608               # open parameter B10 (8 MB)
   max_side_px: 2048
   max_pixels: 40000000
+  phash_threshold: 6               # open parameter B1: max Hamming distance for a near-copy; tune on pilot photos
 
 # GreenGuard categories (T8, V11). Severity values are hand-set engineering assumptions (K16).
 # Prototypes and CLIP prompts are DRAFTS written by Member A; Member B must review them before the pilot (B7).
