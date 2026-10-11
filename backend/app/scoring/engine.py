@@ -94,7 +94,11 @@ def fuse(components: dict[str, ComponentResult], params: Params) -> tuple[float,
         if comp.availability == "unavailable" or comp.score is None:
             rows.append(ComponentRow(name, "unavailable", None, w, 0.0, 0.0, comp.explanation))
             continue
-        e_pos, e_neg = B.evidence(comp.score, w)
+        if name == "community" and params.evidence.community_mode == "direct" and "agree" in comp.extra:
+            # F-1: each weighted vote (and corroboration weight) is direct Beta evidence.
+            e_pos, e_neg = w * comp.extra["agree"], w * comp.extra["disagree"]
+        else:
+            e_pos, e_neg = B.evidence(comp.score, w)
         alpha += e_pos
         beta_ += e_neg
         used += 1

@@ -1,0 +1,5 @@
+# Worker only: zero-shot models. torch >= 2.6 so torch.load defaults to weights_only=True (S2).
+-r requirements.txt
+torch==2.6.0
+transformers==4.47.1
+sentence-transformers==3.3.1

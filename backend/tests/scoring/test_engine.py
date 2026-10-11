@@ -13,6 +13,8 @@ from app.scoring.engine import CivicInputs, PriceInputs, score_civic, score_pric
 from app.scoring.params import load_params
 
 P = load_params()
+# The spec's worked example was written with the old F16 community score; "smoothed" reproduces it exactly.
+P_SMOOTH = P.model_copy(update={"evidence": P.evidence.model_copy(update={"community_mode": "smoothed"})})
 
 
 def worked_example_inputs(votes=()):
@@ -81,13 +83,29 @@ class WorkedExample(unittest.TestCase):
         self.assertNotIn("requires_more_verification", r.flags)
         self.assertEqual(d.components_used, 6)
 
-    def test_step2_three_votes(self):
-        r = score_civic(worked_example_inputs(two_on_spot_one_far()), P)
+    def test_step2_three_votes_spec_smoothed(self):
+        r = score_civic(worked_example_inputs(two_on_spot_one_far()), P_SMOOTH)
         d = r.displayed
         self.assertAlmostEqual(d.alpha, 4.574, places=2)
         self.assertAlmostEqual(d.credibility, 0.821, places=3)
         self.assertAlmostEqual(d.uncertainty, 0.269, places=3)
         self.assertEqual(d.status, B.Status.STRONGLY_SUPPORTED)
+
+    def test_step2_three_votes_direct(self):
+        # F-1: A = 1.458 weighted agreement is added straight to alpha
+        d = score_civic(worked_example_inputs(two_on_spot_one_far()), P).displayed
+        self.assertAlmostEqual(d.alpha, 4.152 + 1.458, places=2)
+        self.assertAlmostEqual(d.credibility, 0.849, places=3)
+        self.assertAlmostEqual(d.uncertainty, 0.202, places=3)
+        self.assertEqual(d.status, B.Status.STRONGLY_SUPPORTED)
+
+    def test_disagreeing_votes_now_count(self):
+        # Three trusted on-spot voters disagree: direct evidence makes the conflict check fire
+        votes = [Vote(f"x{i}", f"dx{i}", "on_spot", "disagree", 5, 1) for i in range(3)]
+        direct = score_civic(worked_example_inputs(votes), P).displayed
+        smooth = score_civic(worked_example_inputs(votes), P_SMOOTH).displayed
+        self.assertLess(direct.credibility, smooth.credibility)
+        self.assertEqual(direct.status, B.Status.UNCERTAIN)
 
     def test_step3_reputation_outcomes(self):
         r = score_civic(worked_example_inputs(two_on_spot_one_far()), P)
@@ -101,9 +119,12 @@ class WorkedExample(unittest.TestCase):
 
     def test_leave_one_out_values_match_spec(self):
         votes = two_on_spot_one_far()
-        r = score_civic(worked_example_inputs([votes[1], votes[2]]), P)
+        r = score_civic(worked_example_inputs([votes[1], votes[2]]), P_SMOOTH)
         self.assertAlmostEqual(r.judging.credibility, 0.816, places=3)
         self.assertAlmostEqual(r.judging.uncertainty, 0.280, places=3)
+        r = score_civic(worked_example_inputs([votes[1], votes[2]]), P)
+        self.assertAlmostEqual(r.judging.credibility, 0.832, places=3)
+        self.assertAlmostEqual(r.judging.uncertainty, 0.242, places=3)
 
     def test_voters_rewarded_from_fourth_on_spot_voter(self):
         votes = [Vote(f"v{i}", f"d{i}", "on_spot", "confirm", 5, 1) for i in range(4)]

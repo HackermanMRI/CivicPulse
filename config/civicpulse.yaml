@@ -12,6 +12,8 @@ status:
 
 evidence:
   weight_profile: A                # A = all weights 1.0 (build and demo); B = learned (results chapter only)
+  community_mode: direct           # F-1 (approved 11 Oct 2026): weighted votes are evidence, α += w·A, β += w·D
+                                   # "smoothed" = the old F16 single score, kept only for the ablation chapter
   weights_a: {text: 1.0, image: 1.0, gps: 1.0, metadata: 1.0, reputation: 1.0, community: 1.0, history: 1.0}
   weights_b: null                  # filled by the profile-B fit script (F30)
 

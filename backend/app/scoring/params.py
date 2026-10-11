@@ -43,6 +43,7 @@ class StatusCfg(_Strict):
 
 class EvidenceCfg(_Strict):
     weight_profile: Literal["A", "B"]
+    community_mode: Literal["direct", "smoothed"] = "direct"
     weights_a: dict[str, float]
     weights_b: dict[str, float] | None = None
 
@@ -260,7 +261,9 @@ def default_config_path() -> Path:
 
 def load_params(path: str | Path | None = None) -> Params:
     """Read the YAML with safe_load (never yaml.load) and validate every value."""
-    path = Path(path) if path else default_config_path()
+    import os
+
+    path = Path(path) if path else Path(os.environ.get("CONFIG_PATH") or default_config_path())
     raw_bytes = path.read_bytes()
     data = yaml.safe_load(raw_bytes)
     if not isinstance(data, dict):
