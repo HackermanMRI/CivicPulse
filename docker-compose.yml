@@ -1,0 +1,56 @@
+# CivicPulse defence stack (spec §2). Batch 3: db, redis, api. nginx, worker and scheduler come in later batches.
+# Only the API port is published for now, and only on this laptop (127.0.0.1).
+name: civicpulse
+
+services:
+  db:
+    image: postgis/postgis:16-3.4
+    environment:
+      POSTGRES_DB: civicpulse
+      POSTGRES_USER: civicpulse_owner
+      POSTGRES_PASSWORD: ${OWNER_DB_PASSWORD:?set OWNER_DB_PASSWORD in .env}
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD in .env}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/db/01_app_role.sh:/docker-entrypoint-initdb.d/01_app_role.sh:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U civicpulse_owner -d civicpulse"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+    networks: [internal]
+
+  redis:
+    image: redis:7.4-alpine
+    command: ["redis-server", "--save", "", "--appendonly", "no"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    networks: [internal]
+
+  api:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql+psycopg2://civicpulse_app:${APP_DB_PASSWORD}@db:5432/civicpulse
+      MIGRATION_DATABASE_URL: postgresql+psycopg2://civicpulse_owner:${OWNER_DB_PASSWORD}@db:5432/civicpulse
+      REDIS_URL: redis://redis:6379/0
+    depends_on:
+      db: {condition: service_healthy}
+      redis: {condition: service_healthy}
+    volumes:
+      - uploads:/data/uploads
+    ports:
+      - "127.0.0.1:8000:8000"
+    networks: [internal]
+
+volumes:
+  pgdata:
+  uploads:
+
+networks:
+  internal:

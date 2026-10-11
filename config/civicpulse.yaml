@@ -1,0 +1,215 @@
+# CivicPulse configuration: every tunable constant lives here (spec §1 "Configuration file").
+# Loaded with yaml.safe_load and validated by backend/app/scoring/params.py at startup.
+# Changing a value changes the config hash stored with every scoring run.
+
+status:
+  strongly_supported: {min_credibility: 0.70, max_uncertainty: 0.30}
+  supported: {min_credibility: 0.50, max_uncertainty: 0.50}
+  not_supported_max_credibility: 0.30
+  conflict_threshold: 0.5          # theta_c, tune on the validation split only (P4)
+  gate_reputation: {min_rep: 0.70, max_uncertainty: 0.30}
+  gate_enabled: true               # false only for evaluation baseline B4 ("CivicPulse without the gate")
+
+evidence:
+  weight_profile: A                # A = all weights 1.0 (build and demo); B = learned (results chapter only)
+  community_mode: direct           # F-1 (approved 11 Oct 2026): weighted votes are evidence, α += w·A, β += w·D
+                                   # "smoothed" = the old F16 single score, kept only for the ablation chapter
+  weights_a: {text: 1.0, image: 1.0, gps: 1.0, metadata: 1.0, reputation: 1.0, community: 1.0, history: 1.0}
+  weights_b: null                  # filled by the profile-B fit script (F30)
+
+gps:
+  accuracy_limit_m: 50
+  market_radius_default_m: 150
+  ward_fallback_radius_m: 300
+
+metadata:
+  capture_token_minutes: 10        # T_token (P6); capture time is fixed at first capture (U20)
+
+history:
+  radius_m: 200
+  window_days: 90
+  half_life_days: 30
+
+events:
+  radius_m: 50
+  window_hours: 72
+
+votes:
+  on_spot_radius_m: 100
+  mode_weights: {on_spot: 1.0, same_ward: 0.5, far_away: 0.25}
+  consensus_k: 3
+  fixed_now_to_resolve: 3
+  burst_per_minute: 10
+
+reputation:
+  half_life_days: 90
+  report_positive: {d_alpha: 1.0, d_beta: 0.0}
+  report_negative: {d_alpha: 0.0, d_beta: 1.0}
+  duplicate: {d_alpha: 0.0, d_beta: 0.5}
+  vote_agree: {d_alpha: 0.5, d_beta: 0.0}
+  vote_disagree: {d_alpha: 0.0, d_beta: 0.25}
+
+flags:
+  needs_verification_ratio: 1.5    # u >= 1.5 * c (displayed values)
+  auto_hide_uncertainty: 0.80
+  auto_hide_after_days: 7
+  image_mismatch_threshold: 0.5
+
+prices:
+  min_eligible_reports: 3
+  outlier_z: 3.5
+  small_n_threshold: 0.25
+  small_n_switch: 8
+  mad_floor_bdt: 1.0
+  mad_floor_fraction: 0.02
+  agreement_tolerance: 0.25
+  raw_display_days: 7
+  max_days_back: 7                 # C6: date seen at most 7 days back, never in the future
+  change_window_days: 7            # P-4: % change over 7 consecutive days
+  alert_change_percent: 10.0       # P-2: rise / drop alert threshold
+
+hotspots:
+  window_days: 30
+  half_life_days: 7
+  t_ref: 5.0
+  min_samples: 3
+  eps_m: 150                       # open parameter B3: tune with a k-distance plot on pilot data
+  min_reports: 3
+  min_users: 2
+  severity_weights: {impact: 0.5, extent: 0.3, urgency: 0.2}
+
+alerts:
+  baseline_days: 28
+  guard_days: 2
+  min_live_days: 7
+  min_count: 3
+  alpha: 0.05                      # Bonferroni-corrected by the number of tests that day
+  overdispersion_switch: 1.5
+
+collusion:
+  n_min: 10
+  agreement: 0.9
+  percentile: 5
+  down_weighting_enabled: false
+
+limits:
+  civic_per_day: 1
+  price_per_cell_per_day: 1
+  capture_tokens_per_minute: 10
+  retakes_per_report: 5
+  description_max_chars: 2000      # U19
+
+sessions:
+  access_minutes: 15
+  refresh_days: 30                 # U1: stay logged in for 30 days (spec P12 said 7; changed in the UI phase)
+  admin_refresh_days: 1
+
+otp:
+  digits: 6
+  expiry_minutes: 5
+  max_attempts: 5
+
+uploads:
+  max_bytes: 8388608               # open parameter B10 (8 MB)
+  max_side_px: 2048
+  max_pixels: 40000000
+
+# GreenGuard categories (T8, V11). Severity values are hand-set engineering assumptions (K16).
+# Prototypes and CLIP prompts are DRAFTS written by Member A; Member B must review them before the pilot (B7).
+categories:
+  - code: waterlogging
+    name_en: Waterlogging
+    name_bn: জলাবদ্ধতা
+    impact: 0.9
+    extent: 0.8
+    urgency: 0.9
+    review_status: draft
+    clip_prompts: ["a photo of a flooded street with standing water"]
+    text_prototypes:
+      - "Water is standing on the road and people cannot walk."
+      - "রাস্তায় হাঁটু পানি জমে আছে"
+      - "rastay pani jome ache, rickshaw jete parche na"
+  - code: water_pollution
+    name_en: Water pollution
+    name_bn: পানি দূষণ
+    impact: 0.8
+    extent: 0.6
+    urgency: 0.9
+    review_status: draft
+    clip_prompts: ["a photo of a polluted river or canal with dirty water"]
+    text_prototypes:
+      - "The canal water is black and smells bad."
+      - "নদীর পানি কালো হয়ে গেছে, দুর্গন্ধ"
+      - "khaler pani kalo, onek gondho"
+  - code: damaged_road
+    name_en: Damaged road / pothole
+    name_bn: ভাঙা রাস্তা / গর্ত
+    impact: 0.8
+    extent: 0.6
+    urgency: 0.7
+    review_status: draft
+    clip_prompts: ["a photo of a damaged road with potholes"]
+    text_prototypes:
+      - "There is a big pothole in the middle of the road."
+      - "রাস্তায় বড় গর্ত, গাড়ি চলতে পারে না"
+      - "rastay boro gorto, accident hote pare"
+  - code: deforestation
+    name_en: Deforestation
+    name_bn: বৃক্ষ নিধন
+    impact: 0.8
+    extent: 0.6
+    urgency: 0.7
+    review_status: draft
+    clip_prompts: ["a photo of cut down trees and tree stumps"]
+    text_prototypes:
+      - "Many trees were cut down beside the road."
+      - "রাস্তার পাশে অনেক গাছ কেটে ফেলা হয়েছে"
+      - "onek gach kete feleche"
+  - code: drainage
+    name_en: Drainage problem
+    name_bn: ড্রেনেজ সমস্যা
+    impact: 0.7
+    extent: 0.6
+    urgency: 0.8
+    review_status: draft
+    clip_prompts: ["a photo of a blocked or overflowing drain"]
+    text_prototypes:
+      - "The drain is blocked and dirty water is overflowing."
+      - "ড্রেন বন্ধ হয়ে ময়লা পানি উপচে পড়ছে"
+      - "drain bondho, nongra pani uthe ashche"
+  - code: garbage
+    name_en: Garbage accumulation
+    name_bn: আবর্জনা জমা
+    impact: 0.6
+    extent: 0.7
+    urgency: 0.8
+    review_status: draft
+    clip_prompts: ["a photo of a pile of garbage on the street"]
+    text_prototypes:
+      - "Garbage has not been collected for days and it smells."
+      - "কয়েকদিন ধরে ময়লা পরিষ্কার হয়নি"
+      - "koydin dhore moyla porishkar hoyni"
+  - code: streetlight
+    name_en: Broken streetlight
+    name_bn: নষ্ট সড়কবাতি
+    impact: 0.6
+    extent: 0.4
+    urgency: 0.7
+    review_status: draft
+    clip_prompts: ["a photo of a broken street light on a dark street"]
+    text_prototypes:
+      - "The street light is broken and the road is dark at night."
+      - "রাস্তার বাতি নষ্ট, রাতে অন্ধকার"
+      - "street light noshto, rate ondhokar"
+
+clip_unrelated_prompt: "a photo of an ordinary scene with no civic problem"
+
+ml:
+  clip_model: openai/clip-vit-base-patch32
+  text_encoder: intfloat/multilingual-e5-base      # final choice comes from E7 (P13)
+  text_query_prefix: "query: "                       # e5 inputs must start with "query: "
+  text_temperature: 0.01                             # open parameter B6: tune on the validation split
+  encoder_candidates:
+    - {name: intfloat/multilingual-e5-base, query_prefix: "query: "}
+    - {name: sentence-transformers/LaBSE, query_prefix: ""}
+    - {name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2, query_prefix: ""}
