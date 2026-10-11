@@ -16,6 +16,15 @@ with the output of `docker compose logs --tail 80 api worker`.
 - [ ] Reload the page: still logged in. Log out, log in again.
 - [ ] Forgot password works with a new code.
 
+## Radix + Motion (B5, B11)
+- [ ] `docker compose up -d --build` finishes (the frontend image installs @radix-ui/* and motion; first build after this change needs internet).
+- [ ] Pop-ups (report, "How reputation works") fade and rise in, close with Esc, outside click and the X; Tab stays inside while open.
+- [ ] Selects open a list; arrow keys and typing a letter move through it; Esc closes it.
+- [ ] Alerts tabs switch with ← →; the active pill slides. The bottom-bar pill slides between pages.
+- [ ] Toasts appear at the bottom, can be swiped down or closed with ×, and are read out by a screen reader.
+- [ ] Dashboard map buttons show a label on hover and on keyboard focus. Tapping a DEMO badge on a card explains it.
+- [ ] With "Reduce motion" on in the OS, nothing slides; short fades only.
+
 ## Green Guard (log in as 01700000001)
 - [ ] Feed matches the mockup: "Pinned Reports" bar on top; unvoted cards show the reporter's name, a locked "Reputation after vote" pill, the category band, text, photo and three buttons (Verify on spot / nearby / from far away).
 - [ ] Open an unvoted card: no status, scores or reputation. Tap "Verify from far away" → "Issue confirmed" → "Send vote": the card now shows credibility/uncertainty bars, the status chip, reputation and the On spot / Nearby / Far away ✓✕ tiles.

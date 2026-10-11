@@ -118,45 +118,47 @@ export function Alerts() {
           { value: "alerts", label: "Alerts", badge: unread.alerts },
           { value: "notifications", label: "Notifications", badge: unread.notifications },
         ]}
-      />
-      <p className="mt-3 text-sm leading-relaxed text-primary">
-        Alerts: new reports in your areas and unusual activity.
-        <br />
-        Notifications: every status change on your own and pinned reports.
-      </p>
-      {loading && !data && (
-        <div className="mt-5 space-y-3">
-          {Array.from({ length: 3 }, (_, i) => (
-            <Skeleton key={i} className="h-24 rounded-2xl" />
-          ))}
-        </div>
-      )}
-      {error && <ErrorState error={error} onRetry={reload} title="Couldn't load alerts" />}
-      {data && data.items.length === 0 && (
-        <StateBlock icon="bell" title="All quiet">
-          {tab === "alerts" ? "New reports in your areas and unusual activity show up here." : "When one of your reports or a report you pinned changes status, you see it here."}
-        </StateBlock>
-      )}
-      {fresh.length > 0 && (
-        <section className="mt-5">
-          <h2 className="mb-2.5 text-[15px] font-bold text-primary">New</h2>
-          <ul className="space-y-3">
-            {fresh.map((n) => (
-              <AlertItem key={n.id} n={n} onOpen={read} />
+        label="Alert lists"
+      >
+        <p className="mt-3 text-sm leading-relaxed text-primary">
+          Alerts: new reports in your areas and unusual activity.
+          <br />
+          Notifications: every status change on your own and pinned reports.
+        </p>
+        {loading && !data && (
+          <div className="mt-5 space-y-3">
+            {Array.from({ length: 3 }, (_, i) => (
+              <Skeleton key={i} className="h-24 rounded-2xl" />
             ))}
-          </ul>
-        </section>
-      )}
-      {earlier.length > 0 && (
-        <section className="mt-6">
-          <h2 className="mb-2.5 text-[15px] font-bold text-primary">Earlier</h2>
-          <ul className="space-y-3">
-            {earlier.map((n) => (
-              <AlertItem key={n.id} n={n} onOpen={read} />
-            ))}
-          </ul>
-        </section>
-      )}
+          </div>
+        )}
+        {error && <ErrorState error={error} onRetry={reload} title="Couldn't load alerts" />}
+        {data && data.items.length === 0 && (
+          <StateBlock icon="bell" title="All quiet">
+            {tab === "alerts" ? "New reports in your areas and unusual activity show up here." : "When one of your reports or a report you pinned changes status, you see it here."}
+          </StateBlock>
+        )}
+        {fresh.length > 0 && (
+          <section className="mt-5">
+            <h2 className="mb-2.5 text-[15px] font-bold text-primary">New</h2>
+            <ul className="space-y-3">
+              {fresh.map((n) => (
+                <AlertItem key={n.id} n={n} onOpen={read} />
+              ))}
+            </ul>
+          </section>
+        )}
+        {earlier.length > 0 && (
+          <section className="mt-6">
+            <h2 className="mb-2.5 text-[15px] font-bold text-primary">Earlier</h2>
+            <ul className="space-y-3">
+              {earlier.map((n) => (
+                <AlertItem key={n.id} n={n} onOpen={read} />
+              ))}
+            </ul>
+          </section>
+        )}
+      </Tabs>
       <ReportDialog id={open} onClose={() => setOpen(null)} />
     </Shell>
   );
@@ -407,21 +409,22 @@ export function MyReports() {
   return (
     <Shell module={module} title="My reports">
       <BackTitle title="My reports" />
-      <Tabs className="mt-2" value={type} onChange={setType} tabs={[{ value: "civic", label: "Civic problems" }, { value: "price", label: "Prices" }]} />
-      {loading && <Skeleton className="mt-4 h-40 w-full" />}
-      {error && <ErrorState error={error} onRetry={reload} />}
-      {data && data.length === 0 && (
-        <StateBlock icon={type === "civic" ? "mapPin" : "tag"} title="Nothing here yet">
-          {type === "civic" ? "Reports you post show up here with their status." : "Prices you report show up here."}
-        </StateBlock>
-      )}
-      {data && data.length > 0 && (
-        <ul className="mt-3">
-          {data.map((r) => (
-            <ReportRow key={r.id} r={r} onOpen={setOpen} />
-          ))}
-        </ul>
-      )}
+      <Tabs className="mt-2" label="Report types" value={type} onChange={setType} tabs={[{ value: "civic", label: "Civic problems" }, { value: "price", label: "Prices" }]}>
+        {loading && <Skeleton className="mt-4 h-40 w-full" />}
+        {error && <ErrorState error={error} onRetry={reload} />}
+        {data && data.length === 0 && (
+          <StateBlock icon={type === "civic" ? "mapPin" : "tag"} title="Nothing here yet">
+            {type === "civic" ? "Reports you post show up here with their status." : "Prices you report show up here."}
+          </StateBlock>
+        )}
+        {data && data.length > 0 && (
+          <ul className="mt-3">
+            {data.map((r) => (
+              <ReportRow key={r.id} r={r} onOpen={setOpen} />
+            ))}
+          </ul>
+        )}
+      </Tabs>
       <ReportDialog id={open} onClose={() => setOpen(null)} />
     </Shell>
   );

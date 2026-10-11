@@ -17,10 +17,11 @@ export function AppProvider({ children }) {
   const [live, setLive] = useState(null); // last live notification (drives the ripple on the dashboard)
   const toastId = useRef(0);
 
+  // Radix Toast closes each toast after its duration (paused on hover/focus) and calls dismiss().
+  const dismiss = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), []);
   const toast = useCallback((text, kind = "info") => {
     const id = ++toastId.current;
-    setToasts((t) => [...t, { id, text, kind }]);
-    setTimeout(() => setToasts((t) => t.filter((x) => x.id !== id)), 4500);
+    setToasts((t) => [...t.slice(-2), { id, text, kind }]);
   }, []);
 
   const loadMe = useCallback(async () => {
@@ -94,8 +95,8 @@ export function AppProvider({ children }) {
   }, []);
 
   const value = useMemo(
-    () => ({ user, setUser, loadMe, booting, signIn, signOut, toast, toasts, online, offlineSince, unread, refreshUnread, live }),
-    [user, loadMe, booting, signIn, signOut, toast, toasts, online, offlineSince, unread, refreshUnread, live],
+    () => ({ user, setUser, loadMe, booting, signIn, signOut, toast, dismiss, toasts, online, offlineSince, unread, refreshUnread, live }),
+    [user, loadMe, booting, signIn, signOut, toast, dismiss, toasts, online, offlineSince, unread, refreshUnread, live],
   );
   return <AppCtx.Provider value={value}>{children}</AppCtx.Provider>;
 }

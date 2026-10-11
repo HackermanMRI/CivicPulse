@@ -1,11 +1,12 @@
 // Green Guard: ward feed with the pinned-reports bar, the pinned list and the 5-step report form
 // (boards: Green Guard feed, States, Report form step 4; W2, W3, T3, T6).
+import { m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Camera, ensureFreshToken } from "../components/Camera.jsx";
 import { Icon, categoryIcon } from "../components/icons.jsx";
 import { ReportCard, ReportDialog } from "../components/Report.jsx";
 import { Shell } from "../components/Shell.jsx";
-import { Button, CardSkeleton, ErrorState, FormHeader, StateBlock, StepBar, cx, textareaCls, useNow } from "../components/ui.jsx";
+import { Button, CardSkeleton, enter, ErrorState, FormHeader, StateBlock, StepBar, cx, textareaCls, useNow } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { fmtLongStamp, fmtTime } from "../lib/format.js";
 import { getPosition } from "../lib/geo.js";
@@ -26,8 +27,11 @@ function CardList({ items, setItems, onPin }) {
   return (
     <>
       <div className="grid gap-4">
-        {items.map((r) => (
-          <ReportCard key={r.id} report={r} onOpen={(x, mode, focus) => setOpen({ id: x.id, mode, focus })} onSaved={(saved) => replace({ ...r, saved })} />
+        {items.map((r, i) => (
+          // Stagger 40 ms, at most 6 items (motion tokens); later pages appear without delay.
+          <m.div key={r.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...enter(), delay: Math.min(i % 10, 5) * 0.04 }}>
+            <ReportCard report={r} onOpen={(x, mode, focus) => setOpen({ id: x.id, mode, focus })} onSaved={(saved) => replace({ ...r, saved })} />
+          </m.div>
         ))}
       </div>
       <ReportDialog id={open?.id} initialMode={open?.mode} focus={open?.focus} onClose={() => setOpen(null)} onChanged={(full) => replace(full)} />

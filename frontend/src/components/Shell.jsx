@@ -4,7 +4,8 @@
 import { Link, navigate, useRoute } from "../lib/router.jsx";
 import { useApp } from "../lib/store.jsx";
 import { Icon, Logo } from "./icons.jsx";
-import { OfflineBanner, Toasts, cx } from "./ui.jsx";
+import { m } from "motion/react";
+import { ModuleProvider, OfflineBanner, Toasts, cx, enter } from "./ui.jsx";
 
 const MODULE = {
   gg: { name: "Green Guard", home: "/gg/feed", icon: "pulse", other: "pp" },
@@ -71,11 +72,12 @@ function DesktopBar({ module, items, active, badge }) {
                   key={it.to}
                   to={it.to}
                   aria-current={active(it.to) ? "page" : undefined}
-                  className={cx("flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-bold", active(it.to) ? "bg-primary text-white" : "text-ink hover:bg-soft/50")}
+                  className={cx("relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-bold", active(it.to) ? "text-white" : "text-ink hover:bg-soft/50")}
                 >
-                  {module === "gg" && <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="size-5" />}
-                  {it.desk || it.label}
-                  {it.icon === "bell" && <Badge n={badge} />}
+                  {active(it.to) && <m.span layoutId="desk-pill" className="absolute inset-0 rounded-xl bg-primary" transition={enter()} />}
+                  {module === "gg" && <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="relative size-5" />}
+                  <span className="relative">{it.desk || it.label}</span>
+                  {it.icon === "bell" && <Badge n={badge} className="relative" />}
                 </Link>
               ),
             )}
@@ -129,8 +131,9 @@ function BottomBar({ items, active, badge }) {
                     <Icon name="plus" className="size-7" strokeWidth={2.4} />
                   </span>
                 ) : (
-                  <span className={cx("relative grid h-8 w-14 place-items-center rounded-full transition-colors duration-150", on ? "bg-soft text-ink" : "text-ink/80")}>
-                    <Icon name={it.icon} className="size-6" strokeWidth={on ? 2.2 : 1.9} />
+                  <span className={cx("relative grid h-8 w-14 place-items-center rounded-full", on ? "text-ink" : "text-ink/80")}>
+                    {on && <m.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-soft" transition={enter()} />}
+                    <Icon name={it.icon} className="relative size-6" strokeWidth={on ? 2.2 : 1.9} />
                     {it.icon === "bell" && <Badge n={badge} className="absolute -top-1 right-2.5" />}
                   </span>
                 )}
@@ -151,6 +154,7 @@ export function Shell({ module, children, wide, title, bare }) {
   const badge = (unread?.alerts || 0) + (unread?.notifications || 0);
   const active = (to) => (to === "/pp" ? path === "/pp" : path === to || path.startsWith(to + "/"));
   return (
+    <ModuleProvider value={module}>
     <div data-module={module} className="min-h-dvh bg-bg text-ink">
       <OfflineBanner />
       <DesktopBar module={module} items={items} active={active} badge={badge} />
@@ -159,16 +163,19 @@ export function Shell({ module, children, wide, title, bare }) {
       <BottomBar items={items} active={active} badge={badge} />
       <Toasts />
     </div>
+    </ModuleProvider>
   );
 }
 
 export function Plain({ children, module = "shell", className }) {
   return (
-    <div data-module={module} className={cx("min-h-dvh bg-bg text-ink", className)}>
-      <OfflineBanner />
-      <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">{children}</main>
-      <Toasts />
-    </div>
+    <ModuleProvider value={module}>
+      <div data-module={module} className={cx("min-h-dvh bg-bg text-ink", className)}>
+        <OfflineBanner />
+        <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">{children}</main>
+        <Toasts />
+      </div>
+    </ModuleProvider>
   );
 }
 

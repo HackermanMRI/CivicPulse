@@ -1,6 +1,14 @@
-// Shared UI parts, styled after the "City Pulse" design-system board. Native elements (dialog, select, input)
-// keep the pages accessible without extra libraries.
-import { useEffect, useRef, useState } from "react";
+// Shared UI parts, styled after the "City Pulse" design-system board.
+// Overlays and pickers use Radix primitives (B11: Dialog, Popover, Tabs, Select, Toast, Tooltip): they bring focus
+// trapping, Esc, scroll lock, keyboard navigation and ARIA wiring. Motion for React animates them (B5).
+import * as RDialog from "@radix-ui/react-dialog";
+import * as RPopover from "@radix-ui/react-popover";
+import * as RSelect from "@radix-ui/react-select";
+import * as RTabs from "@radix-ui/react-tabs";
+import * as RToast from "@radix-ui/react-toast";
+import * as RTooltip from "@radix-ui/react-tooltip";
+import { AnimatePresence, m } from "motion/react";
+import { Children, createContext, isValidElement, useContext, useEffect, useState } from "react";
 import { photoUrl } from "../lib/api.js";
 import { STATUS } from "../lib/format.js";
 import { useApp } from "../lib/store.jsx";
@@ -9,6 +17,18 @@ import { Icon } from "./icons.jsx";
 export function cx(...parts) {
   return parts.filter(Boolean).join(" ");
 }
+
+// Motion tokens (design-system board): enter 220 ms on the enter curve, exit ~70 % of that on the exit curve.
+export const EASE_ENTER = [0.2, 0, 0, 1];
+export const EASE_EXIT = [0.3, 0, 1, 1];
+export const enter = (duration = 0.22) => ({ duration, ease: EASE_ENTER });
+export const exit = (duration = 0.15) => ({ duration, ease: EASE_EXIT });
+
+// Radix renders overlays in a portal on <body>, outside the page's data-module wrapper. The Shell provides the
+// current module so every portal can carry the same colour roles.
+const ModuleCtx = createContext("shell");
+export const ModuleProvider = ModuleCtx.Provider;
+export const useModule = () => useContext(ModuleCtx);
 
 // Buttons: radius 12, 48 px tall (44 px small). Disabled buttons use the soft fill, never just opacity.
 export function Button({ kind = "primary", size = "md", className, busy, busyLabel, icon, children, ...rest }) {
@@ -70,19 +90,41 @@ export function FlagChip({ flag, className }) {
   );
 }
 
-export function DemoBadge({ className }) {
+export function DemoBadge({ className, explain = false }) {
+  const badge = "inline-flex shrink-0 rounded-md bg-err px-1.5 py-px text-[11px] font-bold tracking-wide text-white";
+  if (!explain)
+    return (
+      <span title="Synthetic DEMO data. Never used for research results." className={cx(badge, className)}>
+        DEMO
+      </span>
+    );
   return (
-    <span title="Synthetic DEMO data. Never used for research results." className={cx("inline-flex shrink-0 rounded-md bg-err px-1.5 py-px text-[11px] font-bold tracking-wide text-white", className)}>
-      DEMO
-    </span>
+    <Popover
+      label="What DEMO means"
+      trigger={
+        <button type="button" className={cx(badge, "cursor-help", className)} aria-label="DEMO data: what does this mean?">
+          DEMO
+        </button>
+      }
+    >
+      <p className="font-bold">Synthetic DEMO data</p>
+      <p className="mt-1">It fills the screens for the demonstration. It is never used for training, testing or any reported result.</p>
+    </Popover>
   );
 }
 
 // Score bar (credibility / uncertainty). Fills once (vote reveal), the number never counts up.
 export function ScoreBar({ value, color = "bg-primary", track = "bg-soft", className, animate = true }) {
+  const width = `${Math.max(0, Math.min(100, value ?? 0))}%`;
   return (
     <span className={cx("block h-2 overflow-hidden rounded-full", track, className)} aria-hidden>
-      <span className={cx("block h-full rounded-full", color, animate && "cp-bar")} style={{ width: `${Math.max(0, Math.min(100, value ?? 0))}%` }} />
+      <m.span
+        className={cx("block h-full origin-left rounded-full", color)}
+        style={{ width }}
+        initial={animate ? { scaleX: 0 } : false}
+        animate={{ scaleX: 1 }}
+        transition={enter(0.32)}
+      />
     </span>
   );
 }
@@ -165,52 +207,119 @@ export function OfflineBanner() {
   );
 }
 
-// Toasts: success on the dark text colour, errors outlined in red (design-system board).
+// Toasts (Radix Toast: announced to screen readers, swipe or Esc to dismiss): success on the dark text colour,
+// errors outlined in red (design-system board).
 export function Toasts() {
-  const { toasts } = useApp();
+  const { toasts, dismiss } = useApp();
+  const module = useModule();
   return (
-    <div aria-live="polite" className="pointer-events-none fixed inset-x-0 bottom-28 z-50 flex flex-col items-center gap-2 px-4 md:bottom-6">
-      {toasts.map((t) => (
-        <div
-          key={t.id}
-          className={cx(
-            "pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-xl px-4 py-3 text-[15px] font-medium shadow-3",
-            t.kind === "error" ? "border-[1.5px] border-err bg-white text-err" : t.kind === "warn" ? "border-[1.5px] border-warn bg-white text-warn-ink" : "bg-ink text-white",
-          )}
-        >
-          <Icon name={t.kind === "error" || t.kind === "warn" ? "alert" : "check"} className="mt-0.5 size-5 shrink-0" />
-          <span>{t.text}</span>
-        </div>
-      ))}
-    </div>
+    <RToast.Provider swipeDirection="down" duration={4500} label="Notification">
+      <AnimatePresence initial={false}>
+        {toasts.map((t) => (
+          <RToast.Root key={t.id} asChild forceMount type={t.kind === "error" ? "foreground" : "background"} duration={4500} onOpenChange={(open) => !open && dismiss(t.id)}>
+            <m.li
+              layout
+              initial={{ opacity: 0, y: 16 }}
+              animate={{ opacity: 1, y: 0, transition: enter() }}
+              exit={{ opacity: 0, y: 8, transition: exit() }}
+              className={cx(
+                "pointer-events-auto flex w-full max-w-md items-start gap-2.5 rounded-xl px-4 py-3 text-[15px] font-medium shadow-3",
+                t.kind === "error" ? "border-[1.5px] border-err bg-white text-err" : t.kind === "warn" ? "border-[1.5px] border-warn bg-white text-warn-ink" : "bg-ink text-white",
+              )}
+            >
+              <Icon name={t.kind === "error" || t.kind === "warn" ? "alert" : "check"} className="mt-0.5 size-5 shrink-0" />
+              <RToast.Description className="flex-1">{t.text}</RToast.Description>
+              <RToast.Close className="-my-1 -mr-2 grid size-8 shrink-0 place-items-center rounded-full opacity-70 hover:opacity-100" aria-label="Dismiss">
+                <Icon name="x" className="size-4" />
+              </RToast.Close>
+            </m.li>
+          </RToast.Root>
+        ))}
+      </AnimatePresence>
+      <RToast.Viewport data-module={module} className="pointer-events-none fixed inset-x-0 bottom-28 z-[60] m-0 flex list-none flex-col items-center gap-2 px-4 outline-none md:bottom-6" />
+    </RToast.Provider>
   );
 }
 
-// Modal dialog (native <dialog>: focus trap, Esc, backdrop). On phones it fills the screen from the bottom.
+// Modal dialog (Radix Dialog: focus trap, Esc, scroll lock, outside click). Phones: a sheet from the bottom.
+// Motion: fade + rise, 220 ms in / 150 ms out; reduced motion turns it into a short fade (MotionConfig in main.jsx).
 export function Dialog({ open, onClose, title, children, size = "md", bare = false }) {
-  const ref = useRef(null);
-  useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) d.showModal();
-    if (!open && d.open) d.close();
-  }, [open]);
+  const module = useModule();
   const width = { md: "md:max-w-xl", lg: "md:max-w-3xl", xl: "md:max-w-[1240px]" }[size];
   return (
-    <dialog ref={ref} className={cx("cp-dialog", width)} onClose={onClose} onClick={(e) => e.target === ref.current && onClose()} aria-label={title}>
-      {open &&
-        (bare ? (
-          children
-        ) : (
-          <div className="flex max-h-[inherit] flex-col">
-            <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
-              <h2 className="display text-xl">{title}</h2>
-              <CloseButton onClick={onClose} />
-            </div>
-            <div className="overflow-y-auto px-5 pb-5">{children}</div>
-          </div>
-        ))}
-    </dialog>
+    <RDialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
+      <AnimatePresence>
+        {open && (
+          <RDialog.Portal forceMount>
+            <RDialog.Overlay asChild forceMount>
+              <m.div
+                data-module={module}
+                className="fixed inset-0 z-50 flex items-end justify-center bg-ink/45 md:items-center md:p-6"
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1, transition: enter() }}
+                exit={{ opacity: 0, transition: exit() }}
+              >
+                <RDialog.Content asChild forceMount aria-describedby={undefined}>
+                  <m.div
+                    className={cx("flex max-h-[92dvh] w-full flex-col overflow-hidden rounded-t-[20px] bg-bg text-ink shadow-3 focus:outline-none md:max-h-[min(92dvh,900px)] md:rounded-[20px]", width)}
+                    initial={{ opacity: 0, y: 24 }}
+                    animate={{ opacity: 1, y: 0, transition: enter() }}
+                    exit={{ opacity: 0, y: 16, transition: exit() }}
+                  >
+                    {bare ? (
+                      <>
+                        <RDialog.Title className="sr-only">{title}</RDialog.Title>
+                        {children}
+                      </>
+                    ) : (
+                      <>
+                        <div className="flex items-center justify-between gap-3 px-5 pb-2 pt-4">
+                          <RDialog.Title className="display text-xl">{title}</RDialog.Title>
+                          <CloseButton onClick={onClose} />
+                        </div>
+                        <div className="overflow-y-auto px-5 pb-5">{children}</div>
+                      </>
+                    )}
+                  </m.div>
+                </RDialog.Content>
+              </m.div>
+            </RDialog.Overlay>
+          </RDialog.Portal>
+        )}
+      </AnimatePresence>
+    </RDialog.Root>
+  );
+}
+
+// Popover (Radix): small explanations that must work on touch too, where a title tooltip never shows.
+export function Popover({ trigger, label, children, side = "bottom" }) {
+  const module = useModule();
+  return (
+    <RPopover.Root>
+      <RPopover.Trigger asChild>{trigger}</RPopover.Trigger>
+      <RPopover.Portal>
+        <RPopover.Content data-module={module} side={side} sideOffset={8} collisionPadding={12} aria-label={label} className="z-[70] max-w-72 rounded-xl border border-line bg-white p-3.5 text-sm text-ink shadow-3 focus:outline-none">
+          {children}
+          <RPopover.Arrow className="fill-white" />
+        </RPopover.Content>
+      </RPopover.Portal>
+    </RPopover.Root>
+  );
+}
+
+// Tooltip (Radix) for icon-only buttons: shows on hover and keyboard focus. The button keeps its aria-label.
+export function Tip({ label, children, side = "left" }) {
+  const module = useModule();
+  return (
+    <RTooltip.Root>
+      <RTooltip.Trigger asChild>{children}</RTooltip.Trigger>
+      <RTooltip.Portal>
+        <RTooltip.Content data-module={module} side={side} sideOffset={6} className="z-[70] rounded-lg bg-ink px-2.5 py-1.5 text-[13px] font-semibold text-white shadow-2">
+          {label}
+          <RTooltip.Arrow className="fill-ink" />
+        </RTooltip.Content>
+      </RTooltip.Portal>
+    </RTooltip.Root>
   );
 }
 
@@ -254,14 +363,73 @@ export const inputBase =
 export const inputCls = `${inputBase} min-h-[52px] py-2.5 text-[17px]`;
 export const textareaCls = (minH = "min-h-28") => `${inputBase} ${minH} py-2.5 text-[17px] leading-relaxed`;
 
-export function Select({ className, children, compact, ...rest }) {
+// Select (Radix): pages keep writing <option> children and onChange(e) like a native select; this wrapper turns
+// them into Radix items. Radix reserves "" for "no value", so an enabled "" option (e.g. "All categories") is
+// stored under a sentinel, and a disabled "" option becomes the placeholder.
+const EMPTY = "__empty__";
+const textOf = (node) =>
+  typeof node === "string" || typeof node === "number" ? String(node) : Array.isArray(node) ? node.map(textOf).join("") : isValidElement(node) ? textOf(node.props.children) : "";
+
+export function Select({ className, children, compact, value, onChange, id, disabled, required, name, ...rest }) {
+  const module = useModule();
+  let placeholder;
+  const items = [];
+  Children.toArray(children).forEach((o) => {
+    if (!isValidElement(o) || o.type !== "option") return;
+    const v = String(o.props.value ?? "");
+    const label = textOf(o.props.children);
+    if (v === "" && o.props.disabled) placeholder = label;
+    else items.push({ value: v === "" ? EMPTY : v, label, disabled: o.props.disabled });
+  });
+  const current = value === undefined || value === null ? undefined : String(value) === "" ? (items.some((i) => i.value === EMPTY) ? EMPTY : "") : String(value);
   return (
-    <span className={cx("relative block", className)}>
-      <select className={cx(inputBase, "appearance-none pr-10", compact ? "min-h-11 py-1.5 pl-3 text-sm" : "min-h-[52px] py-2.5 text-[17px]")} {...rest}>
-        {children}
-      </select>
-      <Icon name="chevronDown" className="pointer-events-none absolute right-3.5 top-1/2 size-5 -translate-y-1/2 text-ink/80" />
-    </span>
+    <RSelect.Root value={current} onValueChange={(v) => onChange?.({ target: { value: v === EMPTY ? "" : v } })} disabled={disabled} required={required} name={name}>
+      <span className={cx("relative block", className)}>
+      <RSelect.Trigger
+        id={id}
+        aria-label={rest["aria-label"]}
+        className={cx(inputBase, "relative flex items-center gap-2 pr-10 text-left data-[placeholder]:text-ink/55", compact ? "min-h-11 py-1.5 pl-3 text-sm" : "min-h-[52px] py-2.5 text-[17px]")}
+      >
+        <span className="min-w-0 flex-1 truncate">
+          <RSelect.Value placeholder={placeholder} />
+        </span>
+        <RSelect.Icon className="absolute right-3.5 top-1/2 -translate-y-1/2 text-ink/80">
+          <Icon name="chevronDown" className="size-5" />
+        </RSelect.Icon>
+      </RSelect.Trigger>
+      </span>
+      <RSelect.Portal>
+        <RSelect.Content
+          data-module={module}
+          position="popper"
+          sideOffset={6}
+          collisionPadding={12}
+          className="z-[70] max-h-[var(--radix-select-content-available-height)] min-w-[var(--radix-select-trigger-width)] overflow-hidden rounded-xl border border-line bg-white text-ink shadow-3"
+        >
+          <RSelect.ScrollUpButton className="grid h-7 place-items-center text-ink/70">
+            <Icon name="chevronUp" className="size-4" />
+          </RSelect.ScrollUpButton>
+          <RSelect.Viewport className="p-1.5">
+            {items.map((it) => (
+              <RSelect.Item
+                key={it.value}
+                value={it.value}
+                disabled={it.disabled}
+                className="relative flex min-h-11 cursor-pointer select-none items-center rounded-lg py-2 pl-9 pr-3 text-[15px] outline-none data-[disabled]:cursor-not-allowed data-[disabled]:text-ink/40 data-[highlighted]:bg-soft/60 data-[state=checked]:font-bold"
+              >
+                <RSelect.ItemIndicator className="absolute left-2.5 inline-flex">
+                  <Icon name="check" className="size-4 text-primary" strokeWidth={2.6} />
+                </RSelect.ItemIndicator>
+                <RSelect.ItemText>{it.label}</RSelect.ItemText>
+              </RSelect.Item>
+            ))}
+          </RSelect.Viewport>
+          <RSelect.ScrollDownButton className="grid h-7 place-items-center text-ink/70">
+            <Icon name="chevronDown" className="size-4" />
+          </RSelect.ScrollDownButton>
+        </RSelect.Content>
+      </RSelect.Portal>
+    </RSelect.Root>
   );
 }
 
@@ -287,28 +455,31 @@ export function Segmented({ options, value, onChange, label, className, dark }) 
   );
 }
 
-// Tabs with counts (Alerts | Notifications).
-export function Tabs({ tabs, value, onChange, className }) {
+// Tabs with counts (Radix Tabs: arrow keys move between tabs). Pass the panel as children so the tab and its
+// panel are linked for screen readers.
+export function Tabs({ tabs, value, onChange, className, label, children }) {
   return (
-    <div role="tablist" className={cx("grid auto-cols-fr grid-flow-col gap-1 rounded-2xl border border-line bg-white p-1", className)}>
-      {tabs.map((t) => {
-        const on = value === t.value;
-        return (
-          <button
-            key={t.value}
-            role="tab"
-            aria-selected={on}
-            onClick={() => onChange(t.value)}
-            className={cx("flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-base font-bold", on ? "bg-primary text-white" : "text-ink hover:bg-soft/40")}
-          >
-            {t.label}
-            {t.badge ? (
-              <span className={cx("num grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-[13px] font-bold", on ? "bg-white text-ink" : "bg-err text-white")}>{t.badge}</span>
-            ) : null}
-          </button>
-        );
-      })}
-    </div>
+    <RTabs.Root value={value} onValueChange={onChange} activationMode="automatic">
+      <RTabs.List aria-label={label} className={cx("grid auto-cols-fr grid-flow-col gap-1 rounded-2xl border border-line bg-white p-1", className)}>
+        {tabs.map((t) => {
+          const on = value === t.value;
+          return (
+            <RTabs.Trigger key={t.value} value={t.value} className={cx("relative flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-base font-bold", on ? "text-white" : "text-ink hover:bg-soft/40")}>
+              {on && <m.span layoutId={`tab-${label || "tabs"}`} className="absolute inset-0 rounded-xl bg-primary" transition={enter()} />}
+              <span className="relative">{t.label}</span>
+              {t.badge ? (
+                <span className={cx("num relative grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-[13px] font-bold", on ? "bg-white text-ink" : "bg-err text-white")}>{t.badge}</span>
+              ) : null}
+            </RTabs.Trigger>
+          );
+        })}
+      </RTabs.List>
+      {children !== undefined && (
+        <RTabs.Content value={value} className="focus-visible:outline-none" forceMount>
+          {children}
+        </RTabs.Content>
+      )}
+    </RTabs.Root>
   );
 }
 

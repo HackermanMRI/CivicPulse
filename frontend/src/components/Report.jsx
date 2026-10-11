@@ -52,7 +52,7 @@ function ReporterRow({ r, right }) {
       <div className="min-w-0 flex-1">
         <p className="flex items-center gap-2 truncate text-[17px] font-bold leading-6">
           <span className="truncate">{name}</span>
-          {r.is_seed && <DemoBadge />}
+          {r.is_seed && <DemoBadge explain />}
         </p>
         <p className="truncate text-sm text-primary">{wardLine(r)}</p>
       </div>
@@ -495,7 +495,7 @@ export function ReportDialog({ id, initialMode, focus, onClose, onChanged }) {
                     {image.score_display >= 50 ? "Image matches category" : "Image may not match"} · {image.score_display}
                   </span>
                 )}
-                {r.is_seed && <DemoBadge className="absolute left-4 top-4" />}
+                {r.is_seed && <DemoBadge explain className="absolute left-4 top-4" />}
               </Photo>
               <div className="flex flex-col gap-4 p-5 md:p-6">
                 <div className="flex items-start gap-3">
