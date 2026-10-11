@@ -1,9 +1,10 @@
 // Routes. Sign-in pages are open; everything else needs a session. Map and admin code load lazily (B14).
 import { Suspense, lazy } from "react";
-import { Alerts, Profile } from "./pages/Account.jsx";
+import { Alerts, EditAreas, MyReports, Profile } from "./pages/Account.jsx";
 import { Forgot, Login, ModulePicker, Signup } from "./pages/auth/Auth.jsx";
 import { Feed, Pinned, ReportForm } from "./pages/GreenGuard.jsx";
 import { Explore, PriceDashboard, PriceReport } from "./pages/prices/Prices.jsx";
+import { Logo } from "./components/icons.jsx";
 import { Skeleton } from "./components/ui.jsx";
 import { Redirect, useRoute } from "./lib/router.jsx";
 import { useApp } from "./lib/store.jsx";
@@ -16,8 +17,8 @@ const OPEN = { "/login": Login, "/signup": Signup, "/forgot": Forgot };
 function Splash() {
   return (
     <div className="grid min-h-dvh place-items-center" aria-busy="true">
-      <span className="cp-pulse relative grid size-16 place-items-center rounded-full bg-primary">
-        <span className="size-4 rounded-full bg-white" />
+      <span className="cp-pulse relative rounded-[18px]">
+        <Logo size="lg" />
       </span>
     </div>
   );
@@ -52,6 +53,8 @@ export default function App() {
     "/gg/pinned": Pinned,
     "/alerts": Alerts,
     "/profile": Profile,
+    "/profile/reports": MyReports,
+    "/profile/areas": EditAreas,
     "/pp": PriceDashboard,
     "/pp/explore": Explore,
     "/pp/report": PriceReport,

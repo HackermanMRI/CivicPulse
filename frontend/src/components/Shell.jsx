@@ -1,116 +1,182 @@
-// App frame: desktop top bar + phone bottom bar with 5 items (B10). The module wrapper switches colour roles.
-import { Link, useRoute } from "../lib/router.jsx";
+// App frame. Phone: a slim top bar (module mark or page title + a pill that switches module) and a bottom bar with
+// 5 items, Report raised in the middle (B10). Desktop: one floating bar with the same items.
+// The module wrapper sets the colour roles (data-module), so every part below uses the same tokens.
+import { Link, navigate, useRoute } from "../lib/router.jsx";
 import { useApp } from "../lib/store.jsx";
-import { OfflineBanner, Toasts, cx } from "./ui.jsx";
+import { Icon, Logo } from "./icons.jsx";
+import { m } from "motion/react";
+import { ModuleProvider, OfflineBanner, Toasts, cx, enter } from "./ui.jsx";
 
-const ICONS = {
-  dashboard: "M4 13h6V4H4v9Zm0 7h6v-5H4v5Zm10 0h6v-9h-6v9Zm0-16v5h6V4h-6Z",
-  feed: "M4 5h16v3H4V5Zm0 6h16v3H4v-3Zm0 6h10v3H4v-3Z",
-  report: "M11 5h2v6h6v2h-6v6h-2v-6H5v-2h6V5Z",
-  alerts: "M12 3a6 6 0 0 0-6 6v4l-2 3v1h16v-1l-2-3V9a6 6 0 0 0-6-6Zm0 19a2.5 2.5 0 0 0 2.4-2h-4.8A2.5 2.5 0 0 0 12 22Z",
-  profile: "M12 12a4.5 4.5 0 1 0 0-9 4.5 4.5 0 0 0 0 9Zm0 2c-4.4 0-8 2.2-8 5v2h16v-2c0-2.8-3.6-5-8-5Z",
-  explore: "M10 3a7 7 0 1 0 4.2 12.6l5.1 5.1 1.4-1.4-5.1-5.1A7 7 0 0 0 10 3Zm0 2a5 5 0 1 1 0 10 5 5 0 0 1 0-10Z",
+const MODULE = {
+  gg: { name: "Green Guard", home: "/gg/feed", icon: "pulse", other: "pp" },
+  pp: { name: "Price Patrol", home: "/pp", icon: "tag", other: "gg" },
 };
-
-export function Icon({ name, className = "size-6" }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden fill="currentColor">
-      <path d={ICONS[name]} />
-    </svg>
-  );
-}
 
 function navItems(module) {
   if (module === "pp")
     return [
-      { to: "/pp", label: "Prices", icon: "dashboard" },
-      { to: "/pp/explore", label: "Explore", icon: "explore" },
-      { to: "/pp/report", label: "Report", icon: "report", raised: true },
-      { to: "/alerts", label: "Alerts", icon: "alerts" },
-      { to: "/profile", label: "Profile", icon: "profile" },
+      { to: "/pp", label: "Prices", desk: "Price Dashboard", icon: "tag" },
+      { to: "/pp/explore", label: "Explore", desk: "Explore Prices", icon: "search" },
+      { to: "/pp/report", label: "Report", desk: "Report a Price", icon: "plus", raised: true },
+      { to: "/alerts", label: "Alerts", icon: "bell" },
+      { to: "/profile", label: "Profile", icon: "user" },
     ];
   return [
-    { to: "/gg/dashboard", label: "Dashboard", icon: "dashboard" },
+    { to: "/gg/dashboard", label: "Dashboard", icon: "map" },
     { to: "/gg/feed", label: "Feed", icon: "feed" },
-    { to: "/gg/report", label: "Report", icon: "report", raised: true },
-    { to: "/alerts", label: "Alerts", icon: "alerts" },
-    { to: "/profile", label: "Profile", icon: "profile" },
+    { to: "/gg/report", label: "Report", icon: "plus", raised: true },
+    { to: "/alerts", label: "Alerts", icon: "bell" },
+    { to: "/profile", label: "Profile", icon: "user" },
   ];
 }
 
-export function Shell({ module, children, wide }) {
+// The pill at the top right: always in the OTHER module's colour, so it reads as a door to that area.
+export function SwitchPill({ module, className }) {
+  const other = MODULE[MODULE[module].other];
+  return (
+    <button
+      data-module={MODULE[module].other}
+      onClick={() => navigate(other.home)}
+      className={cx("inline-flex min-h-11 shrink-0 items-center gap-2 rounded-full bg-primary px-4 text-[15px] font-bold text-white shadow-1 hover:brightness-95", className)}
+    >
+      <Icon name="swap" className="size-4" strokeWidth={2.4} />
+      {other.name}
+    </button>
+  );
+}
+
+function Badge({ n, className }) {
+  if (!n) return null;
+  return <span className={cx("num grid h-5 min-w-5 place-items-center rounded-full bg-err px-1 text-[12px] font-bold leading-none text-white ring-2 ring-white", className)}>{n > 99 ? "99+" : n}</span>;
+}
+
+function DesktopBar({ module, items, active, badge }) {
+  const mod = MODULE[module];
+  const { user } = useApp();
+  return (
+    <div className="mx-auto hidden max-w-[1360px] px-5 pt-4 md:block">
+      <div className="flex items-center gap-4 rounded-2xl border border-line/80 bg-white px-4 py-3 shadow-1">
+        <Link to={mod.home} className="flex items-center gap-3">
+          <Logo icon={mod.icon} />
+          <span className="display text-lg">{mod.name}</span>
+        </Link>
+        <nav aria-label="Main" className={cx("flex flex-1 items-center gap-1", module === "pp" ? "ml-4" : "justify-center")}>
+          <div className={cx("flex items-center gap-1", module === "pp" && "rounded-2xl border border-line/80 p-1")}>
+            {items.map((it) =>
+              it.to === "/profile" && module === "gg" ? (
+                <Link key={it.to} to="/profile" aria-current={active(it.to) ? "page" : undefined} aria-label="Profile" className={cx("ml-1 grid size-11 place-items-center rounded-full", active(it.to) ? "bg-primary text-white" : "bg-soft text-primary")}>
+                  <Icon name="user" className="size-5" />
+                </Link>
+              ) : (
+                <Link
+                  key={it.to}
+                  to={it.to}
+                  aria-current={active(it.to) ? "page" : undefined}
+                  className={cx("relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-bold", active(it.to) ? "text-white" : "text-ink hover:bg-soft/50")}
+                >
+                  {active(it.to) && <m.span layoutId="desk-pill" className="absolute inset-0 rounded-xl bg-primary" transition={enter()} />}
+                  {module === "gg" && <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="relative size-5" />}
+                  <span className="relative">{it.desk || it.label}</span>
+                  {it.icon === "bell" && <Badge n={badge} className="relative" />}
+                </Link>
+              ),
+            )}
+          </div>
+        </nav>
+        {user?.role === "admin" && (
+          <Link to="/admin" className="rounded-xl px-3 py-2 text-sm font-bold text-primary hover:bg-soft/50">
+            Admin
+          </Link>
+        )}
+        <SwitchPill module={module} />
+      </div>
+    </div>
+  );
+}
+
+// Phone top bar. Feed-like pages show the module mark; other pages show their own title (Alerts → "Green Guard").
+function PhoneBar({ module, title }) {
+  const mod = MODULE[module];
+  return (
+    <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur md:hidden">
+      <div className="flex min-h-16 items-center gap-3 px-4">
+        {title ? (
+          <span className="display text-lg">{title}</span>
+        ) : (
+          <Link to={mod.home} className="flex items-center gap-3">
+            <Logo icon={mod.icon} size="sm" />
+            <span className="leading-tight">
+              <span className="display block text-[17px]">{mod.name}</span>
+              <span className="block text-xs text-primary">CivicPulse</span>
+            </span>
+          </Link>
+        )}
+        <SwitchPill module={module} className="ml-auto" />
+      </div>
+    </header>
+  );
+}
+
+function BottomBar({ items, active, badge }) {
+  return (
+    <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line/70 bg-white pb-[env(safe-area-inset-bottom)] md:hidden" aria-label="Main">
+      <ul className="mx-auto grid max-w-lg grid-cols-5">
+        {items.map((it) => {
+          const on = active(it.to);
+          return (
+            <li key={it.to} className="flex justify-center">
+              <Link to={it.to} aria-current={on ? "page" : undefined} className="relative flex min-h-[68px] w-full flex-col items-center justify-end gap-1 pb-2 text-[13px]">
+                {it.raised ? (
+                  <span className="absolute -top-7 grid size-[60px] place-items-center rounded-full bg-primary text-white shadow-2 ring-4 ring-white">
+                    <Icon name="plus" className="size-7" strokeWidth={2.4} />
+                  </span>
+                ) : (
+                  <span className={cx("relative grid h-8 w-14 place-items-center rounded-full", on ? "text-ink" : "text-ink/80")}>
+                    {on && <m.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-soft" transition={enter()} />}
+                    <Icon name={it.icon} className="relative size-6" strokeWidth={on ? 2.2 : 1.9} />
+                    {it.icon === "bell" && <Badge n={badge} className="absolute -top-1 right-2.5" />}
+                  </span>
+                )}
+                <span className={cx(on || it.raised ? "font-bold text-ink" : "font-semibold text-ink/85")}>{it.label}</span>
+              </Link>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
+
+export function Shell({ module, children, wide, title, bare }) {
   const { path } = useRoute();
-  const { user, unread } = useApp();
+  const { unread } = useApp();
   const items = navItems(module);
   const badge = (unread?.alerts || 0) + (unread?.notifications || 0);
   const active = (to) => (to === "/pp" ? path === "/pp" : path === to || path.startsWith(to + "/"));
   return (
+    <ModuleProvider value={module}>
     <div data-module={module} className="min-h-dvh bg-bg text-ink">
       <OfflineBanner />
-      <header className="sticky top-0 z-30 border-b border-line/60 bg-bg/95 backdrop-blur">
-        <div className="mx-auto flex h-14 max-w-6xl items-center gap-3 px-4">
-          <Link to={module === "pp" ? "/pp" : "/gg/feed"} className="flex items-center gap-2 font-bold">
-            <span className="relative grid size-8 place-items-center rounded-full bg-primary">
-              <span className="size-2.5 rounded-full bg-white" />
-            </span>
-            <span className="text-lg">CivicPulse</span>
-            <span className="hidden text-sm font-semibold text-primary sm:inline">{module === "pp" ? "Price Patrol" : "Green Guard"}</span>
-          </Link>
-          <nav className="ml-6 hidden items-center gap-1 md:flex" aria-label="Main">
-            {items.map((it) => (
-              <Link key={it.to} to={it.to} className={cx("rounded-md px-3 py-2 font-semibold", active(it.to) ? "bg-soft" : "hover:bg-soft/60")}>
-                {it.label}
-                {it.icon === "alerts" && badge > 0 && <span className="num ml-1 rounded-full bg-primary px-1.5 text-xs text-white">{badge}</span>}
-              </Link>
-            ))}
-          </nav>
-          <div className="ml-auto flex items-center gap-2">
-            <Link to="/modules" className="rounded-md border-2 border-line px-3 py-1.5 text-sm font-semibold hover:bg-soft/60">
-              Switch to {module === "pp" ? "Green Guard" : "Price Patrol"}
-            </Link>
-            {user?.role === "admin" && (
-              <Link to="/admin" className="rounded-md px-3 py-1.5 text-sm font-semibold hover:bg-soft/60">
-                Admin
-              </Link>
-            )}
-          </div>
-        </div>
-      </header>
-      <main className={cx("mx-auto px-4 pb-28 pt-5 md:pb-12", wide ? "max-w-6xl" : "max-w-3xl")}>{children}</main>
-      <nav className="fixed inset-x-0 bottom-0 z-30 border-t border-line/60 bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden" aria-label="Main">
-        <ul className="mx-auto grid max-w-lg grid-cols-5">
-          {items.map((it) => (
-            <li key={it.to} className="flex justify-center">
-              <Link
-                to={it.to}
-                aria-current={active(it.to) ? "page" : undefined}
-                className={cx("relative flex min-h-14 w-full flex-col items-center justify-center gap-0.5 text-xs font-semibold", active(it.to) ? "text-primary" : "text-ink/70")}
-              >
-                {it.raised ? (
-                  <span className="-mt-6 grid size-14 place-items-center rounded-full bg-primary text-white shadow-2">
-                    <Icon name={it.icon} className="size-7" />
-                  </span>
-                ) : (
-                  <Icon name={it.icon} />
-                )}
-                <span>{it.label}</span>
-                {it.icon === "alerts" && badge > 0 && <span className="num absolute right-4 top-1.5 rounded-full bg-primary px-1.5 text-[11px] text-white">{badge}</span>}
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </nav>
+      <DesktopBar module={module} items={items} active={active} badge={badge} />
+      {!bare && <PhoneBar module={module} title={title} />}
+      <main className={cx("mx-auto px-4 pb-32 md:px-5 md:pb-14 md:pt-6", bare ? "pt-4" : "pt-1", wide ? "max-w-[1360px]" : "max-w-2xl")}>{children}</main>
+      <BottomBar items={items} active={active} badge={badge} />
       <Toasts />
     </div>
+    </ModuleProvider>
   );
 }
 
-export function Plain({ children, module = "shell" }) {
+export function Plain({ children, module = "shell", className }) {
   return (
-    <div data-module={module} className="min-h-dvh bg-bg text-ink">
-      <OfflineBanner />
-      <main className="mx-auto max-w-md px-4 py-8">{children}</main>
-      <Toasts />
-    </div>
+    <ModuleProvider value={module}>
+      <div data-module={module} className={cx("min-h-dvh bg-bg text-ink", className)}>
+        <OfflineBanner />
+        <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">{children}</main>
+        <Toasts />
+      </div>
+    </ModuleProvider>
   );
 }
+
+export { MODULE };

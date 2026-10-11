@@ -78,7 +78,8 @@ def daily_alerts(db: Session, test_day: date) -> list[Alert]:
             for uid in N.users_in_ward(db, ward.id):
                 N.notify(db, uid, "emerging_issue",
                          {"text": f"Emerging issue: more {cat.name_en.lower()} reports than usual in {ward.name_en}.",
-                          "ward": ward.name_en, "category": cat.name_en, "observed": r.observed})
+                          "ward": ward.name_en, "category": cat.name_en, "category_code": cat.code,
+                          "observed": r.observed})
         stored.append(values)
     return stored
 

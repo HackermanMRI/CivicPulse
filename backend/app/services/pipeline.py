@@ -308,7 +308,7 @@ def process_civic(db: Session, report_id: uuid.UUID, *, injected: dict | None = 
             if uid != report.user_id:
                 N.notify(db, uid, "new_report_in_ward",
                          {"text": f"A new report has been posted in your locality {ward.name_en}, go check it out!",
-                          "category": cat.name_en, "ward": ward.name_en}, report.id)
+                          "category": cat.name_en, "category_code": cat.code, "ward": ward.name_en}, report.id)
     if relation == "corroboration":
         for other_id, in db.query(Report.id).filter(Report.event_id == report.event_id, Report.id != report.id).all():
             rescore(db, other_id, "corroboration")

@@ -107,8 +107,11 @@ def test_on_the_spot_vote_with_photo_becomes_a_comment(citizens):
 
 
 def test_vote_burst_limit(citizens):
+    import time
     a, b = citizens(2)
     rid = a.civic().json()["id"]
+    if time.time() % 60 > 50:                       # fixed one-minute windows: don't straddle a boundary
+        time.sleep(61 - time.time() % 60)
     codes = [b.post(f"/api/reports/{rid}/votes", data={"decision": "confirm", "mode": "far_away"}).status_code
              for _ in range(11)]
     assert codes[-1] == 429                                                   # 10 per minute (P11)
@@ -212,7 +215,90 @@ def test_insights_respect_x1(citizens):
     assert pts and pts[0]["properties"]["results_visible"] is False and "status" not in pts[0]["properties"]
     mine = a.get("/api/insights/map", params={"days": 7}).json()["features"]
     assert mine[0]["properties"]["results_visible"] is True
-    s = a.get("/api/insights/summary").json()
-    assert s["reports"] == 1
+    s = a.get("/api/insights/summary", params={"status": "all", "show_resolved": "true"}).json()
+    assert s["in_view"] == 1
     assert a.get("/api/insights/grid", params={"days": 7}).status_code == 200
     assert a.get("/api/insights/hotspots").status_code == 200
+
+
+def test_card_shows_reporter_name_but_not_reputation_before_vote(citizens):
+    a, b = citizens(2)
+    rid = a.civic().json()["id"]
+    blind = b.get(f"/api/reports/{rid}").json()
+    assert blind["reporter"] == {"display_name": "Citizen 1", "initials": "C1"}   # UI decision 11 Oct 2026
+    assert "reputation" not in str(blind) and blind["results"] is None
+    b.post(f"/api/reports/{rid}/votes", data={"decision": "confirm", "mode": "far_away"})
+    seen = b.get(f"/api/reports/{rid}").json()["results"]
+    assert seen["votes"]["by_mode"]["far_away"] == {"confirm": 1, "disagree": 0, "fixed_now": 0}
+    assert seen["votes"]["far_away"] == 1 and seen["comments_count"] == 0
+    assert seen["reporter"]["reputation_display"] is not None
+
+
+def test_status_filter_cannot_reveal_one_report_before_voting(citizens):
+    from app.routers.insights import snap_to_cell
+    a, b = citizens(2)
+    a.civic()
+    plain = b.get("/api/insights/map", params={"days": 7}).json()["features"][0]
+    assert plain["properties"]["id"] and plain["properties"]["approximate"] is False
+    # With a result filter (status = all but resolved hidden), b's unvoted point loses its id and exact position.
+    hidden = b.get("/api/insights/map", params={"days": 7, "show_resolved": "false"}).json()["features"][0]
+    assert hidden["properties"]["id"] is None and hidden["properties"]["approximate"] is True
+    lat, lon = snap_to_cell(23.6241, 90.4991)
+    assert hidden["geometry"]["coordinates"] == [lon, lat]
+    mine = a.get("/api/insights/map", params={"days": 7, "show_resolved": "false"}).json()["features"][0]
+    assert mine["properties"]["id"] and mine["properties"]["approximate"] is False   # the reporter still sees it
+
+
+def test_dashboard_summary_panels(citizens):
+    (a,) = citizens(1)
+    a.civic()
+    s = a.get("/api/insights/summary", params={"status": "all", "show_resolved": "true"}).json()
+    assert s["in_view"] == 1 and s["new_this_week"] == 1
+    assert s["top_category"]["code"] == "garbage" and s["top_category"]["share_display"] == 100
+    assert len(s["trend"]) == 30 and s["trend"][-1]["count"] == 1 and s["trend"][-1]["alert"] is False
+    credible = a.get("/api/insights/summary").json()                # default: credible only, resolved hidden
+    assert credible["in_view"] == 0 and credible["wards"] == []
+    year = a.get("/api/insights/summary", params={"start": f"{datetime.now().year}-01-01", "status": "all"}).json()
+    assert year["in_view"] == 1
+    assert a.get("/api/insights/summary", params={"status": "bogus"}).status_code == 422
+
+
+def test_price_dashboard_for_all_markets(citizens, db):
+    (a,) = citizens(1)
+    from app.models import Commodity
+    m1 = Market(name_en="Market A", name_bn="ক", location="SRID=4326;POINT(90.4978 23.6232)", radius_m=150, source="field")
+    m2 = Market(name_en="Market B", name_bn="খ", location="SRID=4326;POINT(90.4980 23.6236)", radius_m=150, source="field")
+    com = Commodity(name_en="Onion", name_bn="পেঁয়াজ", variant="local", unit="kg")
+    db.add_all([m1, m2, com])
+    db.commit()
+    r = a.post("/api/reports/price", data={"commodity_id": str(com.id), "market_id": str(m2.id), "price_bdt": "90",
+                                           "observed_at": datetime.now(timezone.utc).isoformat()})
+    assert r.status_code == 201, r.text
+    dash = a.get("/api/prices/dashboard").json()
+    assert dash["market"] is None and len(dash["cards"]) == 1
+    assert dash["cards"][0]["market"]["name_en"] == "Market B"        # the market with the most evidence today
+    cmp = a.get("/api/prices/compare", params={"commodity_id": com.id}).json()["markets"]
+    assert {m["market"]["name_en"]: m["report_count"] for m in cmp} == {"Market A": 0, "Market B": 1}
+
+
+def test_locate_ward_for_the_report_form(citizens):
+    (a,) = citizens(1)
+    inside = a.get("/api/wards/locate", params={"lat": 23.6241, "lon": 90.4991}).json()
+    assert inside["ward"]["name_en"] == "Test ward"
+    assert a.get("/api/wards/locate", params={"lat": 23.9, "lon": 90.1}).json() == {"ward": None}
+    assert a.get("/api/wards/locate", params={"lat": 123, "lon": 90}).status_code == 422
+
+
+def test_hotspots_carry_their_ward(citizens, db):
+    (a,) = citizens(1)
+    from app.models import Category, Hotspot
+    now = datetime.now(timezone.utc)
+    cat = db.query(Category).filter_by(code="garbage").one()
+    db.add(Hotspot(category_id=cat.id, centroid="SRID=4326;POINT(90.4991 23.6241)", score=70, s_severity=0.6, v_volume=0.5,
+                   c_compact=0.7, t_trust=0.8, n_reports=4, n_users=3, report_ids=[], window_start=now - timedelta(days=30),
+                   window_end=now, eps_m=150, min_samples=3, config_hash="test"))
+    db.commit()
+    h = a.get("/api/insights/hotspots").json()
+    assert h[0]["ward"]["name_en"] == "Test ward" and h[0]["n_users"] == 3
+    pts = a.get("/api/insights/map", params={"days": 7}).json()["features"]
+    assert pts == [] or "severity" in pts[0]["properties"]

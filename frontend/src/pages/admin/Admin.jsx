@@ -1,27 +1,30 @@
-// Minimal admin portal (V4, W2–W8). Raw 0–1 values (C1). Every action needs a written reason and is audited.
-import { useState } from "react";
-import {
-  Button, Card, DemoBadge, Dialog, Empty, ErrorState, FlagChip, OfflineBanner, Photo, Skeleton, StatusChip, Tabs, Toasts, cx, inputCls,
-} from "../../components/ui.jsx";
+// Admin portal (board: Admin report review; V4, W2–W8). Raw 0–1 values (C1). Every action needs a written reason,
+// never changes credibility or reputation directly, and is written to the audit log.
+import { useEffect, useState } from "react";
+import { Logo } from "../../components/icons.jsx";
+import { Button, DemoBadge, ErrorState, OfflineBanner, Photo, Segmented, Select, Skeleton, StatusChip, Toasts, cx, inputCls, textareaCls } from "../../components/ui.jsx";
 import { api } from "../../lib/api.js";
-import { COMPONENT, DECISION, MODE, fmtDateTime } from "../../lib/format.js";
+import { COMPONENT, DECISION, MODE, fmtDateTime, fmtRelDay } from "../../lib/format.js";
 import { Link, navigate, useRoute } from "../../lib/router.jsx";
 import { useApp, useData } from "../../lib/store.jsx";
 
-const n3 = (v) => (v == null ? "—" : Number(v).toFixed(3));
+const n2 = (v) => (v == null ? "—" : Number(v).toFixed(2));
+const shortId = (id) => `#${id.replace(/-/g, "").slice(0, 4).toUpperCase()}`;
+const flagText = (r) => (r.results?.flags || []).map((f) => f.label).join(", ") || (r.visibility !== "visible" ? "Hidden" : "—");
 
-function ReasonForm({ label, action, onDone, kind = "primary" }) {
+function ReasonBox({ label, kind = "primary", action, onDone, placeholder, note }) {
   const { toast } = useApp();
   const [reason, setReason] = useState("");
   const [busy, setBusy] = useState(false);
+  const ok = reason.trim().length >= 5;
   return (
     <form
-      className="flex flex-col gap-2 sm:flex-row"
+      className="rounded-2xl border border-line bg-white p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
         try {
-          await action(reason);
+          await action(reason.trim());
           setReason("");
           onDone?.();
         } catch (err) {
@@ -31,363 +34,386 @@ function ReasonForm({ label, action, onDone, kind = "primary" }) {
         }
       }}
     >
-      <input className={inputCls} required minLength={5} maxLength={1000} placeholder="Reason (required, saved in the audit log)" value={reason} onChange={(e) => setReason(e.target.value)} />
-      <Button kind={kind} busy={busy}>
-        {label}
-      </Button>
+      <label className="block font-bold" htmlFor={`reason-${label}`}>
+        Reason (required)
+      </label>
+      <textarea id={`reason-${label}`} className={cx(textareaCls("min-h-20"), "mt-2")} minLength={5} maxLength={1000} placeholder={placeholder} value={reason} onChange={(e) => setReason(e.target.value)} />
+      <div className="mt-3 flex flex-wrap items-center gap-4">
+        <Button kind={kind} busy={busy} disabled={!ok}>
+          {label}
+        </Button>
+        <p className="min-w-0 flex-1 text-sm text-primary">{ok ? note : `Type a reason first. ${note}`}</p>
+      </div>
     </form>
   );
 }
 
-function Overview() {
-  const { data, error, reload } = useData(() => api("/api/admin/overview"), []);
-  if (error) return <ErrorState error={error} onRetry={reload} />;
-  if (!data) return <Skeleton className="h-24" />;
-  const items = [
-    ["Open alerts", data.open_alerts, "/admin/alerts"], ["Flagged reports", data.flagged_reports, "/admin/reports"],
-    ["Hidden reports", data.hidden_reports, "/admin/reports?f=hidden"], ["Open abuse reports", data.open_abuse, "/admin/reports?f=abuse"],
-    ["Citizens", data.users, "/admin/users"], ["Suspended", data.suspended, "/admin/users"], ["Still scoring", data.pending_reports, "/admin/reports?f=pending"],
-  ];
+function Table({ head, children, className }) {
   return (
-    <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-      {items.map(([label, value, to]) => (
-        <Link key={label} to={to} className="rounded-lg bg-white p-4 shadow-1 hover:shadow-2">
-          <span className="block text-sm text-ink/70">{label}</span>
-          <span className="num text-3xl font-bold">{value}</span>
-        </Link>
-      ))}
-    </div>
-  );
-}
-
-function AlertsQueue() {
-  const [status, setStatus] = useState("open");
-  const [open, setOpen] = useState(null);
-  const list = useData(() => api("/api/admin/alerts", { query: { status } }), [status]);
-  return (
-    <div className="space-y-4">
-      <Tabs className="max-w-xs" value={status} onChange={setStatus} tabs={[{ value: "open", label: "Open" }, { value: "solved", label: "Solved" }]} />
-      {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
-      {list.data?.length === 0 && <Empty title="No alerts">Nothing to review.</Empty>}
-      <ul className="space-y-2">
-        {(list.data || []).map((a) => (
-          <li key={a.id}>
-            <button className="w-full rounded-md bg-white p-3 text-left shadow-1 hover:shadow-2" onClick={() => setOpen(a.id)}>
-              <span className="block font-semibold">{a.kind === "pair_agreement" ? "Pair agreement (possible vote ring)" : "Device rule violation"}</span>
-              <span className="text-sm text-ink/70">
-                {a.user_ids.length} accounts · {a.report_ids.length} reports · {fmtDateTime(a.created_at)} {a.outcome && `· ${a.outcome.replace("_", " ")}`}
-              </span>
-            </button>
-          </li>
-        ))}
-      </ul>
-      {open && <AlertDetail id={open} onClose={() => setOpen(null)} onSolved={list.reload} />}
-    </div>
-  );
-}
-
-function AlertDetail({ id, onClose, onSolved }) {
-  const { toast } = useApp();
-  const { data, error } = useData(() => api(`/api/admin/alerts/${id}`), [id]);
-  const [outcome, setOutcome] = useState("false_alarm");
-  return (
-    <Dialog open onClose={onClose} title="Alert review" wide>
-      <div className="space-y-4 p-5">
-        {error && <ErrorState error={error} />}
-        {!data && !error && <Skeleton className="h-40" />}
-        {data && (
-          <>
-            <section>
-              <h3 className="font-semibold">Signals</h3>
-              <pre className="overflow-x-auto rounded-md bg-soft/50 p-3 text-sm">{JSON.stringify(data.signals, null, 2)}</pre>
-            </section>
-            <section>
-              <h3 className="mb-1 font-semibold">Accounts</h3>
-              <ul className="space-y-1 text-sm">
-                {data.users.map((u) => u && (
-                  <li key={u.id}>
-                    <Link to={`/admin/users/${u.id}`} className="font-semibold text-primary underline">
-                      {u.display_name || "deleted"}
-                    </Link>{" "}
-                    {u.is_seed && <DemoBadge />} · {u.state} · rep {n3(u.rep)} (u {n3(u.rep_uncertainty)}) · {u.devices} device(s)
-                  </li>
-                ))}
-              </ul>
-            </section>
-            {data.votes.length > 0 && (
-              <section>
-                <h3 className="mb-1 font-semibold">Votes on shared reports</h3>
-                <div className="max-h-60 overflow-y-auto rounded-md border border-line/60">
-                  <table className="w-full text-sm">
-                    <thead className="bg-soft/50 text-left">
-                      <tr><th className="px-2 py-1">Report</th><th>Voter</th><th>Decision</th><th>Mode</th><th>Time</th></tr>
-                    </thead>
-                    <tbody>
-                      {data.votes.map((v, i) => (
-                        <tr key={i} className="border-t border-line/40">
-                          <td className="px-2 py-1 font-mono text-xs">{v.report_id.slice(0, 8)}</td>
-                          <td className="font-mono text-xs">{v.voter_id.slice(0, 8)}</td>
-                          <td>{DECISION[v.decision]}</td>
-                          <td>{MODE[v.mode_verified]}</td>
-                          <td>{fmtDateTime(v.created_at)}</td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </section>
-            )}
-            {data.status === "open" ? (
-              <section className="space-y-2 border-t border-line/50 pt-3">
-                <h3 className="font-semibold">Solve (W4). No score or reputation changes automatically (P5).</h3>
-                <select className={cx(inputCls, "w-auto!")} value={outcome} onChange={(e) => setOutcome(e.target.value)}>
-                  <option value="false_alarm">False alarm</option>
-                  <option value="collusion_confirmed">Collusion confirmed</option>
-                </select>
-                <ReasonForm
-                  label="Mark solved"
-                  action={(note) => api(`/api/admin/alerts/${id}/solve`, { method: "POST", body: { outcome, note } })}
-                  onDone={() => {
-                    toast("Alert solved.", "ok");
-                    onSolved();
-                    onClose();
-                  }}
-                />
-              </section>
-            ) : (
-              <p className="text-sm">Solved: {data.outcome?.replace("_", " ")}. Note: {data.note}</p>
-            )}
-          </>
-        )}
-      </div>
-    </Dialog>
-  );
-}
-
-function ReportsQueue() {
-  const { query } = useRoute();
-  const [filter, setFilter] = useState(query.get("f") || "flagged");
-  const [open, setOpen] = useState(null);
-  const list = useData(() => api("/api/admin/reports", { query: { filter } }), [filter]);
-  return (
-    <div className="space-y-4">
-      <Tabs value={filter} onChange={setFilter} tabs={["flagged", "hidden", "abuse", "pending", "all"].map((f) => ({ value: f, label: f[0].toUpperCase() + f.slice(1) }))} />
-      {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
-      {list.loading && <Skeleton className="h-40" />}
-      {list.data?.length === 0 && <Empty title="Queue empty">No reports in this list.</Empty>}
-      {list.data?.length > 0 && (
-        <div className="overflow-x-auto rounded-lg border border-line/60 bg-white">
-          <table className="w-full text-sm">
-            <thead className="bg-soft/50 text-left">
-              <tr><th className="px-3 py-2">Report</th><th>Status</th><th>c</th><th>u</th><th>Flags</th><th>Visibility</th><th>Abuse</th><th>Posted</th></tr>
-            </thead>
-            <tbody>
-              {list.data.map((r) => (
-                <tr key={r.id} className="cursor-pointer border-t border-line/40 hover:bg-soft/30" onClick={() => setOpen(r.id)}>
-                  <td className="px-3 py-2">
-                    {r.type === "civic" ? r.category?.name_en : "Price"} {r.is_seed && <DemoBadge />}
-                    <span className="block text-xs text-ink/60">{r.ward?.name_en}</span>
-                  </td>
-                  <td>{r.results && <StatusChip status={r.results.status} />}</td>
-                  <td className="num">{n3(r.results?.credibility)}</td>
-                  <td className="num">{n3(r.results?.uncertainty)}</td>
-                  <td>{r.results?.flags.map((f) => f.code).join(", ")}</td>
-                  <td>{r.visibility}</td>
-                  <td className="num">{r.open_abuse || ""}</td>
-                  <td>{fmtDateTime(r.submitted_at)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
-      {open && <AdminReport id={open} onClose={() => setOpen(null)} onChanged={list.reload} />}
-    </div>
-  );
-}
-
-function CompTable({ rows, title }) {
-  return (
-    <div>
-      <h4 className="mb-1 font-semibold">{title}</h4>
-      <table className="w-full text-sm">
-        <thead className="text-left text-ink/70">
-          <tr><th>Component</th><th>Avail.</th><th>s</th><th>w</th><th>e+</th><th>e−</th></tr>
+    <div className={cx("overflow-x-auto rounded-2xl border border-line bg-white", className)}>
+      <table className="w-full text-[15px]">
+        <thead>
+          <tr className="border-b border-line text-left text-sm text-primary">
+            {head.map((h) => (
+              <th key={h} className="px-3 py-3 font-bold">
+                {h}
+              </th>
+            ))}
+          </tr>
         </thead>
-        <tbody>
-          {rows.map((c) => (
-            <tr key={c.component} className="border-t border-line/40" title={c.explanation}>
-              <td className="py-1">{COMPONENT[c.component]}</td>
-              <td>{c.availability}</td>
-              <td className="num">{n3(c.score)}</td>
-              <td className="num">{c.weight}</td>
-              <td className="num">{n3(c.pos_ev)}</td>
-              <td className="num">{n3(c.neg_ev)}</td>
-            </tr>
-          ))}
-        </tbody>
+        <tbody>{children}</tbody>
       </table>
     </div>
   );
 }
 
-function AdminReport({ id, onClose, onChanged }) {
-  const { toast } = useApp();
-  const { data: r, error, reload } = useData(() => api(`/api/admin/reports/${id}`), [id]);
+function Row({ selected, onClick, children }) {
   return (
-    <Dialog open onClose={onClose} title="Report review" wide>
-      <div className="space-y-5 p-5">
-        {error && <ErrorState error={error} />}
-        {!r && !error && <Skeleton className="h-60" />}
-        {r && (
-          <>
-            <div className="grid gap-4 md:grid-cols-[14rem_1fr]">
-              <Photo src={r.photo_url} alt="Report photo" className="aspect-square w-full rounded-md" />
-              <div className="space-y-1">
-                <p className="font-semibold">
-                  {r.category?.name_en || "Price report"} {r.is_seed && <DemoBadge />}
-                </p>
-                <p className="whitespace-pre-line">{r.description}</p>
-                <p className="text-sm text-ink/70">
-                  {r.ward?.name_en} · {fmtDateTime(r.submitted_at)} · visibility: <b>{r.visibility}</b> {r.visibility_reason && `(${r.visibility_reason})`}
-                </p>
-                {r.results && (
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusChip status={r.results.status} /> judging: <b>{r.judging_status}</b>
-                    {r.results.flags.map((f) => (
-                      <FlagChip key={f.code} flag={f} />
-                    ))}
-                  </div>
-                )}
-                {r.results && (
-                  <p className="num text-sm">
-                    α {n3(r.results.alpha)} · β {n3(r.results.beta)} · c {n3(r.results.credibility)} · u {n3(r.results.uncertainty)} · κ {n3(r.results.conflict)} · {r.results.components_used}/7
-                  </p>
-                )}
-                {r.reporter && (
-                  <p className="text-sm">
-                    Reporter:{" "}
-                    <Link to={`/admin/users/${r.reporter.id}`} className="font-semibold text-primary underline">
-                      {r.reporter.display_name || "deleted"}
-                    </Link>{" "}
-                    · rep {n3(r.reporter.rep)}
-                  </p>
-                )}
-              </div>
-            </div>
-            {r.results?.components && (
-              <div className="grid gap-4 md:grid-cols-2">
-                <CompTable rows={r.results.components} title="Displayed view" />
-                <CompTable rows={r.components_judging} title="Judging view (no reputation)" />
-              </div>
-            )}
-            {r.votes.length > 0 && (
-              <section>
-                <h4 className="mb-1 font-semibold">Votes</h4>
-                <ul className="text-sm">
-                  {r.votes.map((v) => (
-                    <li key={v.id} className={v.replaced ? "line-through opacity-60" : ""}>
-                      {DECISION[v.decision]} · claimed {MODE[v.mode_claimed]} → {MODE[v.mode_verified]} · weight {n3(v.weight_at_vote)} {v.distance_m != null && `· ${Math.round(v.distance_m)} m`} · {fmtDateTime(v.created_at)}
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            )}
-            {r.abuse_reports.length > 0 && (
-              <section>
-                <h4 className="mb-1 font-semibold">Abuse reports</h4>
-                {r.abuse_reports.map((a) => (
-                  <div key={a.id} className="mb-2 rounded-md bg-soft/40 p-2 text-sm">
-                    “{a.reason}” · {a.state}
-                    {a.state === "open" && (
-                      <ReasonForm label="Mark reviewed" kind="outline" action={(reason) => api(`/api/admin/abuse/${a.id}/review`, { method: "POST", body: { reason } })} onDone={reload} />
-                    )}
-                  </div>
-                ))}
-              </section>
-            )}
-            <section>
-              <h4 className="mb-1 font-semibold">Scoring history</h4>
-              <ul className="max-h-40 overflow-y-auto text-sm">
-                {r.runs.map((s) => (
-                  <li key={s.id}>
-                    {fmtDateTime(s.run_at)} · {s.trigger} · {s.status} (judging {s.judging_status}) · c {n3(s.credibility)} u {n3(s.uncertainty)} · rule {s.gates.displayed_rule} · config {s.config_hash}
-                  </li>
-                ))}
-              </ul>
-            </section>
-            <section className="border-t border-line/50 pt-3">
-              <p className="mb-2 text-sm text-ink/70">Hiding or restoring never changes credibility or reputation directly (W2).</p>
-              {r.visibility === "visible" ? (
-                <ReasonForm
-                  label="Hide report"
-                  kind="danger"
-                  action={(reason) => api(`/api/admin/reports/${id}/hide`, { method: "POST", body: { reason } })}
-                  onDone={() => {
-                    toast("Report hidden.", "ok");
-                    reload();
-                    onChanged();
-                  }}
-                />
-              ) : (
-                <ReasonForm
-                  label="Restore report"
-                  action={(reason) => api(`/api/admin/reports/${id}/restore`, { method: "POST", body: { reason } })}
-                  onDone={() => {
-                    toast("Report restored.", "ok");
-                    reload();
-                    onChanged();
-                  }}
-                />
-              )}
-            </section>
-          </>
-        )}
-      </div>
-    </Dialog>
+    <tr onClick={onClick} className={cx("cursor-pointer border-b border-line/60 align-top last:border-b-0", selected ? "bg-soft/40 shadow-[inset_4px_0_0_var(--primary)]" : "hover:bg-soft/20")}>
+      {children}
+    </tr>
   );
 }
 
-function Users() {
+// ---------- report review ----------
+
+function CompTable({ rows }) {
+  return (
+    <Table head={["Component", "Available", "Score", "e+", "e−", "Why"]}>
+      {rows.map((c) => (
+        <tr key={c.component} className="border-b border-line/60 last:border-b-0">
+          <td className="px-3 py-2.5 font-bold">{COMPONENT[c.component]}</td>
+          <td className="px-3 py-2.5">{c.availability === "unavailable" ? "No" : "Yes"}</td>
+          <td className="num px-3 py-2.5">{c.availability === "unavailable" ? "—" : n2(c.score)}</td>
+          <td className="num px-3 py-2.5">{c.availability === "unavailable" ? "—" : n2(c.pos_ev)}</td>
+          <td className="num px-3 py-2.5">{c.availability === "unavailable" ? "—" : n2(c.neg_ev)}</td>
+          <td className="px-3 py-2.5 text-sm text-primary">{c.explanation}</td>
+        </tr>
+      ))}
+    </Table>
+  );
+}
+
+function ReportDetail({ id, onChanged }) {
+  const { toast } = useApp();
+  const [view, setView] = useState("displayed");
+  const { data: r, error, reload } = useData(() => api(`/api/admin/reports/${id}`), [id]);
+  if (error) return <ErrorState error={error} onRetry={reload} title="Couldn't open the report" />;
+  if (!r) return <Skeleton className="h-[480px] rounded-2xl" />;
+  const res = r.results;
+  const done = (msg) => () => {
+    toast(msg, "ok");
+    reload();
+    onChanged();
+  };
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+        <Photo src={r.photo_url} alt="Report photo" className="aspect-[4/3] w-full rounded-2xl" placeholder="Photo" />
+        <div className="min-w-0 space-y-2">
+          <h2 className="display text-xl">
+            {shortId(r.id)} · {r.category?.name_en || "Price report"} {r.is_seed && <DemoBadge />}
+          </h2>
+          <p className="text-[15px]">
+            {r.ward?.name_en || "Outside the pilot area"}
+            {r.gps_accuracy_m != null && ` · GPS ± ${Math.round(r.gps_accuracy_m)} m`} · by{" "}
+            {r.reporter ? (
+              <Link to={`/admin/users/${r.reporter.id}`} className="font-bold underline">
+                {r.reporter.display_name || "deleted"}
+              </Link>
+            ) : (
+              "unknown"
+            )}
+            {r.reporter && `, reputation ${n2(r.reporter.rep)}`}
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            {res && <StatusChip status={res.status} size="sm" />}
+            <span className={cx("rounded-full px-3 py-0.5 text-sm font-bold", r.visibility === "visible" ? "bg-soft" : "bg-err-soft text-err")}>{r.visibility === "visible" ? "Visible" : `Hidden: ${r.visibility.replace("_", " ")}`}</span>
+            {res?.flags?.length > 0 && <span className="text-sm text-primary">Flag reason: {res.flags.map((f) => f.label).join(", ")}</span>}
+          </div>
+          {res && (
+            <p className="num text-sm">
+              α {n2(res.alpha)} · β {n2(res.beta)} · credibility {n2(res.credibility)} · uncertainty {n2(res.uncertainty)} · conflict {n2(res.conflict)} · judging: {r.judging_status}
+            </p>
+          )}
+          {r.visibility_reason && <p className="text-sm">Hidden because: “{r.visibility_reason}”</p>}
+        </div>
+      </div>
+      {r.description && <p className="rounded-xl bg-white px-4 py-3 text-[15px] leading-relaxed">{r.description}</p>}
+      {res?.components && (
+        <div>
+          <Segmented
+            className="mb-2"
+            label="Component view"
+            value={view}
+            onChange={setView}
+            options={[
+              { value: "displayed", label: "Displayed" },
+              { value: "judging", label: "Judging (no reputation)" },
+            ]}
+          />
+          <CompTable rows={view === "displayed" ? res.components : r.components_judging} />
+        </div>
+      )}
+      {r.visibility === "visible" ? (
+        <ReasonBox label="Hide report" kind="danger" placeholder="Why are you hiding this report?" note="Admin actions never change credibility or reputation, and every action goes into the audit log." action={(reason) => api(`/api/admin/reports/${id}/hide`, { method: "POST", body: { reason } })} onDone={done("Report hidden.")} />
+      ) : (
+        <ReasonBox label="Restore report" placeholder="Why are you restoring this report?" note="The report is scored again and re-enters its event." action={(reason) => api(`/api/admin/reports/${id}/restore`, { method: "POST", body: { reason } })} onDone={done("Report restored.")} />
+      )}
+      {r.abuse_reports.length > 0 && (
+        <section className="space-y-2">
+          <h3 className="font-bold">Abuse reports</h3>
+          {r.abuse_reports.map((a) => (
+            <div key={a.id} className="space-y-2 rounded-xl bg-white p-3">
+              <p className="text-[15px]">
+                “{a.reason}” · <b>{a.state}</b> · {fmtDateTime(a.created_at)}
+              </p>
+              {a.state === "open" && <ReasonBox label="Mark reviewed" kind="line" placeholder="What did you decide?" note="Saved in the audit log." action={(reason) => api(`/api/admin/abuse/${a.id}/review`, { method: "POST", body: { reason } })} onDone={reload} />}
+            </div>
+          ))}
+        </section>
+      )}
+      <details className="rounded-2xl border border-line bg-white p-4">
+        <summary className="cursor-pointer font-bold">Votes ({r.votes.length}) and scoring history ({r.runs.length})</summary>
+        <ul className="mt-3 space-y-1 text-sm">
+          {r.votes.map((v) => (
+            <li key={v.id} className={v.replaced ? "line-through opacity-60" : ""}>
+              {DECISION[v.decision]} · claimed {MODE[v.mode_claimed]} → {MODE[v.mode_verified]} · weight {n2(v.weight_at_vote)} {v.distance_m != null && `· ${Math.round(v.distance_m)} m`} · {fmtDateTime(v.created_at)}
+            </li>
+          ))}
+        </ul>
+        <ul className="mt-3 max-h-48 space-y-1 overflow-y-auto border-t border-line/60 pt-3 text-sm">
+          {r.runs.map((s) => (
+            <li key={s.id} className="num">
+              {fmtDateTime(s.run_at)} · {s.trigger} · {s.status} (judging {s.judging_status}) · c {n2(s.credibility)} u {n2(s.uncertainty)} · rule {s.gates?.displayed_rule} · config {s.config_hash}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </div>
+  );
+}
+
+function ReportReview({ counts, refreshCounts }) {
+  const { query } = useRoute();
+  const [filter, setFilter] = useState(query.get("f") || "flagged");
+  const [sel, setSel] = useState(null);
+  const list = useData(() => api("/api/admin/reports", { query: { filter } }), [filter]);
+  useEffect(() => {
+    if (list.data?.length && !list.data.some((r) => r.id === sel)) setSel(list.data[0].id);
+  }, [list.data]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="display text-[28px]">Report review</h1>
+        <Segmented
+          label="Queue"
+          value={filter}
+          onChange={(v) => {
+            setFilter(v);
+            setSel(null);
+          }}
+          options={[
+            { value: "flagged", label: `Flagged (${counts?.flagged_reports ?? "…"})` },
+            { value: "hidden", label: `Hidden (${counts?.hidden_reports ?? "…"})` },
+            { value: "abuse", label: `Abuse (${counts?.open_abuse ?? "…"})` },
+          ]}
+        />
+      </div>
+      <div className="mt-5 grid gap-6 xl:grid-cols-[5fr_7fr]">
+        <div className="min-w-0">
+          {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
+          {list.loading && <Skeleton className="h-64 rounded-2xl" />}
+          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-white p-6 text-center text-[15px]">Nothing in this queue.</p>}
+          {list.data?.length > 0 && (
+            <Table head={["Report", "Category", "Flags", "Posted"]}>
+              {list.data.map((r) => (
+                <Row key={r.id} selected={r.id === sel} onClick={() => setSel(r.id)}>
+                  <td className="num px-3 py-3 font-extrabold">
+                    {shortId(r.id)} {r.is_seed && <DemoBadge />}
+                  </td>
+                  <td className="px-3 py-3">{r.type === "civic" ? r.category?.name_en : "Price"}</td>
+                  <td className="px-3 py-3">
+                    {flagText(r)}
+                    {r.open_abuse ? <span className="block text-sm font-bold text-err">{r.open_abuse} abuse report(s)</span> : null}
+                  </td>
+                  <td className="px-3 py-3 text-primary">{fmtRelDay(r.submitted_at)}</td>
+                </Row>
+              ))}
+            </Table>
+          )}
+        </div>
+        <div className="min-w-0">
+          {sel ? (
+            <ReportDetail
+              key={sel}
+              id={sel}
+              onChanged={() => {
+                list.reload();
+                refreshCounts();
+              }}
+            />
+          ) : (
+            list.data?.length > 0 && <Skeleton className="h-96 rounded-2xl" />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------- collusion alerts ----------
+
+function AlertDetail({ id, onSolved }) {
+  const { toast } = useApp();
+  const { data, error } = useData(() => api(`/api/admin/alerts/${id}`), [id]);
+  const [outcome, setOutcome] = useState("false_alarm");
+  if (error) return <ErrorState error={error} title="Couldn't open the alert" />;
+  if (!data) return <Skeleton className="h-80 rounded-2xl" />;
+  return (
+    <div className="space-y-4">
+      <h2 className="display text-xl">{data.kind === "pair_agreement" ? "Pair agreement (possible vote ring)" : "Device rule violation"}</h2>
+      <section className="rounded-2xl border border-line bg-white p-4">
+        <h3 className="font-bold">Accounts</h3>
+        <ul className="mt-2 space-y-1 text-[15px]">
+          {data.users.map(
+            (u) =>
+              u && (
+                <li key={u.id}>
+                  <Link to={`/admin/users/${u.id}`} className="font-bold underline">
+                    {u.display_name || "deleted"}
+                  </Link>{" "}
+                  {u.is_seed && <DemoBadge />} · {u.state} · reputation {n2(u.rep)} (u {n2(u.rep_uncertainty)}) · {u.devices} device(s)
+                </li>
+              ),
+          )}
+        </ul>
+        <h3 className="mt-4 font-bold">Signals</h3>
+        <pre className="mt-1 overflow-x-auto rounded-lg bg-bg p-3 text-sm">{JSON.stringify(data.signals, null, 2)}</pre>
+      </section>
+      {data.votes.length > 0 && (
+        <Table head={["Report", "Voter", "Decision", "Mode", "Time"]}>
+          {data.votes.map((v, i) => (
+            <tr key={i} className="border-b border-line/60 last:border-b-0">
+              <td className="num px-3 py-2">{shortId(v.report_id)}</td>
+              <td className="num px-3 py-2">{shortId(v.voter_id)}</td>
+              <td className="px-3 py-2">{DECISION[v.decision]}</td>
+              <td className="px-3 py-2">{MODE[v.mode_verified]}</td>
+              <td className="px-3 py-2">{fmtDateTime(v.created_at)}</td>
+            </tr>
+          ))}
+        </Table>
+      )}
+      {data.status === "open" ? (
+        <>
+          <label className="block">
+            <span className="font-bold">Outcome</span>
+            <Select className="mt-2 max-w-xs" value={outcome} onChange={(e) => setOutcome(e.target.value)}>
+              <option value="false_alarm">False alarm</option>
+              <option value="collusion_confirmed">Collusion confirmed</option>
+            </Select>
+          </label>
+          <ReasonBox
+            label="Mark solved"
+            placeholder="What did you find?"
+            note="No score or reputation changes automatically (P5)."
+            action={(note) => api(`/api/admin/alerts/${id}/solve`, { method: "POST", body: { outcome, note } })}
+            onDone={() => {
+              toast("Alert solved.", "ok");
+              onSolved();
+            }}
+          />
+        </>
+      ) : (
+        <p className="rounded-xl bg-white p-4 text-[15px]">
+          Solved: <b>{data.outcome?.replace("_", " ")}</b>. Note: {data.note}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function CollusionAlerts({ refreshCounts }) {
+  const [status, setStatus] = useState("open");
+  const [sel, setSel] = useState(null);
+  const list = useData(() => api("/api/admin/alerts", { query: { status } }), [status]);
+  return (
+    <>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="display text-[28px]">Collusion alerts</h1>
+        <Segmented label="Alert status" value={status} onChange={(v) => { setStatus(v); setSel(null); }} options={[{ value: "open", label: "Open" }, { value: "solved", label: "Solved" }]} />
+      </div>
+      <div className="mt-5 grid gap-6 xl:grid-cols-[5fr_7fr]">
+        <div className="min-w-0">
+          {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
+          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-white p-6 text-center text-[15px]">No alerts here.</p>}
+          {list.data?.length > 0 && (
+            <Table head={["Alert", "Accounts", "Reports", "Raised"]}>
+              {list.data.map((a) => (
+                <Row key={a.id} selected={a.id === sel} onClick={() => setSel(a.id)}>
+                  <td className="px-3 py-3 font-bold">{a.kind === "pair_agreement" ? "Pair agreement" : "Device rule"}</td>
+                  <td className="num px-3 py-3">{a.user_ids.length}</td>
+                  <td className="num px-3 py-3">{a.report_ids.length}</td>
+                  <td className="px-3 py-3 text-primary">{fmtRelDay(a.created_at)}</td>
+                </Row>
+              ))}
+            </Table>
+          )}
+        </div>
+        <div className="min-w-0">
+          {sel && (
+            <AlertDetail
+              key={sel}
+              id={sel}
+              onSolved={() => {
+                list.reload();
+                refreshCounts();
+                setSel(null);
+              }}
+            />
+          )}
+        </div>
+      </div>
+    </>
+  );
+}
+
+// ---------- accounts ----------
+
+function Accounts() {
   const [q, setQ] = useState("");
   const [search, setSearch] = useState("");
   const list = useData(() => api("/api/admin/users", { query: { q: search } }), [search]);
   return (
-    <div className="space-y-4">
+    <>
+      <h1 className="display text-[28px]">Accounts</h1>
       <form
-        className="flex gap-2"
+        className="mt-4 flex max-w-xl gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           setSearch(q);
         }}
       >
-        <input className={inputCls} placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input className={inputCls} type="search" placeholder="Search name or phone" value={q} onChange={(e) => setQ(e.target.value)} aria-label="Search accounts" />
         <Button>Search</Button>
       </form>
       {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
-      <div className="overflow-x-auto rounded-lg border border-line/60 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-soft/50 text-left">
-            <tr><th className="px-3 py-2">Name</th><th>Phone</th><th>Role</th><th>State</th><th>rep</th><th>u</th><th>Devices</th></tr>
-          </thead>
-          <tbody>
-            {(list.data || []).map((u) => (
-              <tr key={u.id} className="cursor-pointer border-t border-line/40 hover:bg-soft/30" onClick={() => navigate(`/admin/users/${u.id}`)}>
-                <td className="px-3 py-2">
-                  {u.display_name} {u.is_seed && <DemoBadge />}
-                </td>
-                <td>{u.phone || "—"}</td>
-                <td>{u.role}</td>
-                <td>{u.state}</td>
-                <td className="num">{n3(u.rep)}</td>
-                <td className="num">{n3(u.rep_uncertainty)}</td>
-                <td className="num">{u.devices}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <Table className="mt-4" head={["Name", "Phone", "Role", "State", "Reputation", "Uncertainty", "Devices"]}>
+        {(list.data || []).map((u) => (
+          <Row key={u.id} onClick={() => navigate(`/admin/users/${u.id}`)}>
+            <td className="px-3 py-2.5 font-bold">
+              {u.display_name} {u.is_seed && <DemoBadge />}
+            </td>
+            <td className="num px-3 py-2.5">{u.phone || "—"}</td>
+            <td className="px-3 py-2.5">{u.role}</td>
+            <td className="px-3 py-2.5">{u.state}</td>
+            <td className="num px-3 py-2.5">{n2(u.rep)}</td>
+            <td className="num px-3 py-2.5">{n2(u.rep_uncertainty)}</td>
+            <td className="num px-3 py-2.5">{u.devices}</td>
+          </Row>
+        ))}
+      </Table>
+    </>
   );
 }
 
@@ -395,154 +421,175 @@ function UserPage({ id }) {
   const { toast } = useApp();
   const { data: u, error, reload } = useData(() => api(`/api/admin/users/${id}`), [id]);
   if (error) return <ErrorState error={error} onRetry={reload} />;
-  if (!u) return <Skeleton className="h-60" />;
+  if (!u) return <Skeleton className="h-60 rounded-2xl" />;
+  const suspended = u.state === "suspended";
   return (
-    <div className="space-y-5">
-      <Card className="p-4">
-        <h2 className="text-xl font-semibold">
+    <div className="max-w-4xl space-y-5">
+      <button onClick={() => navigate("/admin/users")} className="min-h-11 font-bold underline">
+        ← All accounts
+      </button>
+      <div>
+        <h1 className="display text-[28px]">
           {u.display_name || "deleted"} {u.is_seed && <DemoBadge />}
-        </h2>
-        <p className="num text-sm">
-          {u.phone || "no phone"} · {u.role} · {u.state} · rep {n3(u.rep)} (α {n3(u.alpha)}, β {n3(u.beta)}, u {n3(u.rep_uncertainty)}) · {u.devices} device(s) · since {fmtDateTime(u.created_at)}
+        </h1>
+        <p className="num mt-1 text-[15px] text-primary">
+          {u.phone || "no phone"} · {u.role} · {u.state} · reputation {n2(u.rep)} (α {n2(u.alpha)}, β {n2(u.beta)}, u {n2(u.rep_uncertainty)}) · {u.devices} device(s) · since {fmtDateTime(u.created_at)}
         </p>
-      </Card>
+      </div>
       {u.role === "citizen" && (
-        <section>
-          <h3 className="mb-1 font-semibold">{u.state === "suspended" ? "Reinstate" : "Suspend"} (W3: blocks login and new actions; old reports and votes stay)</h3>
-          <ReasonForm
-            label={u.state === "suspended" ? "Reinstate" : "Suspend"}
-            kind={u.state === "suspended" ? "primary" : "danger"}
-            action={(reason) => api(`/api/admin/users/${id}/${u.state === "suspended" ? "reinstate" : "suspend"}`, { method: "POST", body: { reason } })}
-            onDone={() => {
-              toast("Saved.", "ok");
-              reload();
-            }}
-          />
-        </section>
+        <ReasonBox
+          label={suspended ? "Reinstate" : "Suspend"}
+          kind={suspended ? "primary" : "danger"}
+          placeholder={suspended ? "Why are you reinstating this account?" : "Why are you suspending this account?"}
+          note="Suspending blocks login and new actions; old reports and votes stay (W3)."
+          action={(reason) => api(`/api/admin/users/${id}/${suspended ? "reinstate" : "suspend"}`, { method: "POST", body: { reason } })}
+          onDone={() => {
+            toast("Saved.", "ok");
+            reload();
+          }}
+        />
       )}
-      <section>
-        <h3 className="mb-1 font-semibold">Reports ({u.reports.length})</h3>
-        <ul className="text-sm">
-          {u.reports.map((r) => (
-            <li key={r.id}>
-              {r.type === "civic" ? r.category?.name_en : "Price"} · {r.results?.status} · {fmtDateTime(r.submitted_at)}
-            </li>
-          ))}
-        </ul>
-      </section>
-      <section>
-        <h3 className="mb-1 font-semibold">Reputation events</h3>
-        <ul className="max-h-48 overflow-y-auto text-sm">
+      <Table head={["Report", "Status", "Posted"]}>
+        {u.reports.map((r) => (
+          <tr key={r.id} className="border-b border-line/60 last:border-b-0">
+            <td className="px-3 py-2">
+              {shortId(r.id)} · {r.type === "civic" ? r.category?.name_en : "Price"}
+            </td>
+            <td className="px-3 py-2">{r.results && <StatusChip status={r.results.status} size="sm" />}</td>
+            <td className="px-3 py-2">{fmtDateTime(r.submitted_at)}</td>
+          </tr>
+        ))}
+      </Table>
+      <details className="rounded-2xl border border-line bg-white p-4">
+        <summary className="cursor-pointer font-bold">Reputation events ({u.reputation_events.length}) and moderation history ({u.moderation.length})</summary>
+        <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto text-sm">
           {u.reputation_events.map((e, i) => (
-            <li key={i} className={e.superseded ? "line-through opacity-60" : ""}>
+            <li key={i} className={cx("num", e.superseded && "line-through opacity-60")}>
               {e.kind} · Δα {e.d_alpha} · Δβ {e.d_beta} · {fmtDateTime(e.occurred_at)}
             </li>
           ))}
         </ul>
-      </section>
-      <section>
-        <h3 className="mb-1 font-semibold">Moderation history</h3>
-        {u.moderation.length === 0 ? <p className="text-sm text-ink/70">None.</p> : (
-          <ul className="text-sm">
-            {u.moderation.map((m, i) => (
+        <ul className="mt-3 space-y-1 border-t border-line/60 pt-3 text-sm">
+          {u.moderation.length === 0 ? (
+            <li>No moderation actions.</li>
+          ) : (
+            u.moderation.map((m, i) => (
               <li key={i}>
                 {m.action} · {m.reason} · {fmtDateTime(m.created_at)}
               </li>
-            ))}
-          </ul>
-        )}
-      </section>
+            ))
+          )}
+        </ul>
+      </details>
     </div>
   );
 }
+
+// ---------- audit log ----------
 
 function Audit() {
   const [f, setF] = useState({ entity: "", action: "", from: "", to: "" });
   const [applied, setApplied] = useState(f);
   const list = useData(() => api("/api/admin/audit", { query: applied }), [applied]);
   return (
-    <div className="space-y-4">
+    <>
+      <h1 className="display text-[28px]">Audit log</h1>
+      <p className="mt-1 text-[15px] text-primary">Append-only. Every admin action, with who, when and why.</p>
       <form
-        className="grid gap-2 sm:grid-cols-5"
+        className="mt-4 grid gap-2 sm:grid-cols-5"
         onSubmit={(e) => {
           e.preventDefault();
           setApplied(f);
         }}
       >
-        <input className={inputCls} placeholder="Entity (report, user…)" value={f.entity} onChange={(e) => setF({ ...f, entity: e.target.value })} />
-        <input className={inputCls} placeholder="Action (report.hide…)" value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })} />
+        <input className={inputCls} placeholder="Entity (report, user…)" value={f.entity} onChange={(e) => setF({ ...f, entity: e.target.value })} aria-label="Entity" />
+        <input className={inputCls} placeholder="Action (report.hide…)" value={f.action} onChange={(e) => setF({ ...f, action: e.target.value })} aria-label="Action" />
         <input type="date" className={inputCls} value={f.from} onChange={(e) => setF({ ...f, from: e.target.value })} aria-label="From" />
         <input type="date" className={inputCls} value={f.to} onChange={(e) => setF({ ...f, to: e.target.value })} aria-label="To" />
         <Button>Filter</Button>
       </form>
       {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
-      <div className="overflow-x-auto rounded-lg border border-line/60 bg-white">
-        <table className="w-full text-sm">
-          <thead className="bg-soft/50 text-left">
-            <tr><th className="px-3 py-2">Time</th><th>Actor</th><th>Action</th><th>Entity</th><th>Reason</th></tr>
-          </thead>
-          <tbody>
-            {(list.data || []).map((a) => (
-              <tr key={a.id} className="border-t border-line/40 align-top">
-                <td className="whitespace-nowrap px-3 py-1.5">{fmtDateTime(a.created_at)}</td>
-                <td className="font-mono text-xs">{a.actor_id ? a.actor_id.slice(0, 8) : "system"}</td>
-                <td>{a.action}</td>
-                <td className="font-mono text-xs">
-                  {a.entity} {a.entity_id?.slice(0, 12)}
-                </td>
-                <td>{a.reason}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <Table className="mt-4" head={["Time", "Actor", "Action", "Entity", "Reason"]}>
+        {(list.data || []).map((a) => (
+          <tr key={a.id} className="border-b border-line/60 align-top last:border-b-0">
+            <td className="whitespace-nowrap px-3 py-2">{fmtDateTime(a.created_at)}</td>
+            <td className="num px-3 py-2">{a.actor_id ? shortId(a.actor_id) : "system"}</td>
+            <td className="px-3 py-2 font-bold">{a.action}</td>
+            <td className="num px-3 py-2">
+              {a.entity} {a.entity_id ? shortId(a.entity_id) : ""}
+            </td>
+            <td className="px-3 py-2">{a.reason}</td>
+          </tr>
+        ))}
+      </Table>
+    </>
   );
 }
 
-const TABS = [
-  ["/admin", "Overview"], ["/admin/alerts", "Alerts"], ["/admin/reports", "Reports"], ["/admin/users", "Accounts"], ["/admin/audit", "Audit log"],
+// ---------- frame ----------
+
+const NAV = [
+  ["/admin/alerts", "Collusion alerts", "open_alerts"],
+  ["/admin/reports", "Report review", "flagged_reports"],
+  ["/admin/users", "Accounts", null],
+  ["/admin/audit", "Audit log", null],
 ];
 
 export default function Admin() {
   const { path } = useRoute();
   const { user, signOut } = useApp();
-  if (user?.role !== "admin") return <Empty title="Admins only" />;
+  const counts = useData(() => api("/api/admin/overview"), []);
+  if (user?.role !== "admin")
+    return (
+      <div data-module="shell" className="grid min-h-dvh place-items-center bg-bg p-6 text-center">
+        <p className="display text-xl">Admins only.</p>
+      </div>
+    );
   const userId = path.startsWith("/admin/users/") ? path.split("/")[3] : null;
-  const section = userId ? "/admin/users" : TABS.find(([to]) => to !== "/admin" && path.startsWith(to))?.[0] || "/admin";
+  const section = userId ? "/admin/users" : NAV.find(([to]) => path.startsWith(to))?.[0] || "/admin/reports";
   return (
-    <div data-module="shell" className="min-h-dvh bg-bg text-ink">
-      <OfflineBanner />
-      <header className="border-b border-line/60 bg-bg">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-2 px-4 py-3">
-          <span className="mr-4 text-lg font-bold">CivicPulse admin</span>
-          <nav className="flex flex-wrap gap-1" aria-label="Admin">
-            {TABS.map(([to, label]) => (
-              <Link key={to} to={to} className={cx("rounded-md px-3 py-2 font-semibold", section === to ? "bg-soft" : "hover:bg-soft/60")}>
+    <div data-module="shell" className="min-h-dvh bg-bg text-ink lg:grid lg:grid-cols-[264px_1fr]">
+      <aside className="flex flex-col bg-ink text-white lg:sticky lg:top-0 lg:h-dvh">
+        <div className="flex items-center gap-3 px-5 py-5">
+          <Logo size="sm" />
+          <span className="display text-lg">Admin</span>
+        </div>
+        <nav aria-label="Admin" className="flex gap-1 overflow-x-auto px-3 pb-3 lg:flex-col lg:overflow-visible">
+          {NAV.map(([to, label, key]) => {
+            const on = section === to;
+            const n = key ? counts.data?.[key] : null;
+            return (
+              <Link key={to} to={to} aria-current={on ? "page" : undefined} className={cx("flex min-h-12 shrink-0 items-center justify-between gap-3 rounded-xl px-3.5 font-bold", on ? "bg-primary text-white" : "text-white/90 hover:bg-white/10")}>
                 {label}
+                {n ? <span className="num grid h-6 min-w-6 place-items-center rounded-full bg-err px-1.5 text-[13px]">{n}</span> : null}
               </Link>
-            ))}
-          </nav>
-          <Button
-            kind="ghost"
-            size="sm"
-            className="ml-auto"
+            );
+          })}
+        </nav>
+        <div className="space-y-2 px-5 pb-4 text-sm text-white/80 lg:mt-auto lg:py-5">
+          <p>
+            Signed in as {user.display_name || "admin"}. Session ends after 1 day.
+          </p>
+          <button
+            className="min-h-11 font-bold text-white underline"
             onClick={async () => {
               await signOut();
               navigate("/login", { replace: true });
             }}
           >
             Log out
-          </Button>
+          </button>
         </div>
-      </header>
-      <main className="mx-auto max-w-6xl px-4 py-6">
-        {section === "/admin" && <Overview />}
-        {section === "/admin/alerts" && <AlertsQueue />}
-        {section === "/admin/reports" && <ReportsQueue />}
-        {section === "/admin/users" && (userId ? <UserPage id={userId} /> : <Users />)}
-        {section === "/admin/audit" && <Audit />}
-      </main>
+      </aside>
+      <div>
+        <OfflineBanner />
+        <main className="mx-auto max-w-[1180px] px-5 py-6 lg:px-8 lg:py-7">
+          {section === "/admin/alerts" && <CollusionAlerts refreshCounts={counts.reload} />}
+          {section === "/admin/reports" && <ReportReview counts={counts.data} refreshCounts={counts.reload} />}
+          {section === "/admin/users" && (userId ? <UserPage id={userId} /> : <Accounts />)}
+          {section === "/admin/audit" && <Audit />}
+        </main>
+      </div>
       <Toasts />
     </div>
   );

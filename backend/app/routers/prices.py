@@ -9,6 +9,7 @@ from datetime import date, timedelta
 from statistics import median
 
 from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from app.core.deps import current_user, get_db
@@ -51,27 +52,54 @@ def _change(series: dict[date, float], today: date) -> dict | None:
             "to_date": ch.to_date.isoformat(), "to_price": ch.to_price, "alert": price_alert(ch, params)}
 
 
+def _market_ref(m: Market) -> dict:
+    return {"id": m.id, "name_en": m.name_en, "name_bn": m.name_bn}
+
+
+def _card(db: Session, c: Commodity, m: Market, today: date, watched: set[int]) -> dict:
+    series = verified_series(db, c.id, m.id, today - timedelta(days=13))
+    cells = {v.date: v for v in db.query(VerifiedPrice).filter(VerifiedPrice.commodity_id == c.id, VerifiedPrice.market_id == m.id,
+                                                              VerifiedPrice.date >= today - timedelta(days=13))}
+    cell = cells.get(today)
+    latest_day = max(series) if series else None
+    raw_today = (db.query(func.count(PriceDetail.report_id)).join(Report, Report.id == PriceDetail.report_id)
+                 .filter(PriceDetail.commodity_id == c.id, PriceDetail.market_id == m.id, PriceDetail.observed_date == today,
+                         Report.visibility == "visible").scalar())
+    return {
+        "commodity": _commodity(c), "market": _market_ref(m), "watched": c.id in watched,
+        "latest": {"date": latest_day.isoformat(), "verified_price": series[latest_day],
+                   "report_count": cells[latest_day].report_count if latest_day in cells else None} if latest_day else None,
+        "today": {"status": cell.status, "report_count": cell.report_count, "all_reports": raw_today,
+                  "verified_price": float(cell.verified_price) if cell.verified_price is not None else None}
+        if cell else {"status": "Insufficient Evidence", "report_count": 0, "all_reports": raw_today, "verified_price": None},
+        "change_7d": _change(series, today),
+        "sparkline": [{"date": d.isoformat(), "price": p} for d, p in sorted(series.items())],
+        "reference": _reference(db, c.id, m.id, today),
+    }
+
+
+def _rank(card: dict) -> tuple:
+    """All-markets view: show each product at the market with the strongest evidence today, then the freshest price."""
+    t, latest = card["today"], card["latest"]
+    return (t["status"] == "Verified", t["report_count"], t["all_reports"], latest["date"] if latest else "",
+            (latest["report_count"] or 0) if latest else 0)
+
+
 @router.get("/dashboard")
 def dashboard(market_id: int | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    m = _market(db, market_id)
+    """One card per product. With a market: that market. Without one: every market, best-evidenced card per product."""
     today = dhaka_date()
     watched = {c for c, in db.query(PriceWatch.commodity_id).filter_by(user_id=user.id).all()}
+    if market_id is not None:
+        markets = [_market(db, market_id)]
+    else:
+        markets = db.query(Market).order_by(Market.id).all()
+        if not markets:
+            raise HTTPException(status_code=404, detail="No markets yet")
     cards = []
     for c in db.query(Commodity).filter_by(active=True).order_by(Commodity.name_en, Commodity.variant).all():
-        series = verified_series(db, c.id, m.id, today - timedelta(days=13))
-        cell = db.query(VerifiedPrice).filter_by(commodity_id=c.id, market_id=m.id, date=today).first()
-        latest_day = max(series) if series else None
-        cards.append({
-            "commodity": _commodity(c), "watched": c.id in watched,
-            "latest": {"date": latest_day.isoformat(), "verified_price": series[latest_day]} if latest_day else None,
-            "today": {"status": cell.status, "report_count": cell.report_count,
-                      "verified_price": float(cell.verified_price) if cell.verified_price is not None else None}
-            if cell else {"status": "Insufficient Evidence", "report_count": 0, "verified_price": None},
-            "change_7d": _change(series, today),
-            "sparkline": [{"date": d.isoformat(), "price": p} for d, p in sorted(series.items())],
-            "reference": _reference(db, c.id, m.id, today),
-        })
-    return {"market": {"id": m.id, "name_en": m.name_en, "name_bn": m.name_bn}, "date": today.isoformat(), "cards": cards}
+        cards.append(max((_card(db, c, m, today, watched) for m in markets), key=_rank))
+    return {"market": _market_ref(markets[0]) if market_id is not None else None, "date": today.isoformat(), "cards": cards}
 
 
 @router.get("/history")
@@ -108,13 +136,17 @@ def compare(commodity_id: int, user: User = Depends(current_user), db: Session =
     if c is None:
         raise HTTPException(status_code=404, detail="Not found")
     today = dhaka_date()
+    since = today - timedelta(days=get_params().prices.raw_display_days - 1)
     out = []
     for m in db.query(Market).order_by(Market.name_en).all():
         series = verified_series(db, c.id, m.id, today - timedelta(days=get_params().prices.raw_display_days))
         latest = max(series) if series else None
-        out.append({"market": {"id": m.id, "name_en": m.name_en, "name_bn": m.name_bn},
+        reports = (db.query(func.count(PriceDetail.report_id)).join(Report, Report.id == PriceDetail.report_id)
+                   .filter(PriceDetail.commodity_id == c.id, PriceDetail.market_id == m.id,
+                           PriceDetail.observed_date >= since, Report.visibility == "visible").scalar())
+        out.append({"market": _market_ref(m),
                     "latest": {"date": latest.isoformat(), "verified_price": series[latest]} if latest else None,
-                    "change_7d": _change(series, today)})
+                    "change_7d": _change(series, today), "report_count": reports})
     return {"commodity": _commodity(c), "markets": out}
 
 

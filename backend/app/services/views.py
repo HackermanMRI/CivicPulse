@@ -1,6 +1,7 @@
 """Response shapes for reports, with the blind-voting rule enforced here on the server (T4, V8, X1).
 
-- blind view   (not voted, not the reporter): photo, text, category, location, ward, time. Nothing else.
+- blind view   (not voted, not the reporter): photo, text, category, location, ward, time and the reporter's name
+               (UI decision 11 Oct 2026: the mockup card shows the name; reputation stays hidden). Nothing else.
 - result view  (voted, or the reporter, or an admin): + status, scores, flags, votes, comment photos.
 Citizen screens get ×100 display numbers next to the raw 0–1 values (C1); the admin portal uses the raw ones.
 """
@@ -54,6 +55,10 @@ class ViewContext:
                 self.my_votes[v.report_id] = v
             self.saved = {rid for rid, in db.query(SavedPost.report_id).filter(SavedPost.user_id == viewer.id,
                                                                               SavedPost.report_id.in_(ids)).all()}
+        self.comment_counts: dict[uuid.UUID, int] = dict(
+            db.query(Vote.report_id, func.count(Evidence.id)).join(Evidence, Evidence.vote_id == Vote.id)
+            .filter(Vote.report_id.in_(ids), Vote.replaced_at.is_(None), Vote.mode_verified == "on_spot",
+                    Evidence.kind == "verification_photo").group_by(Vote.report_id).all()) if ids else {}
         self.vote_counts: dict[uuid.UUID, Counter] = {}
         if ids:
             for rid, decision, mode, n in db.query(Vote.report_id, Vote.decision, Vote.mode_verified, func.count()).filter(
@@ -97,12 +102,25 @@ def scores_view(r: Report) -> dict:
     }
 
 
+MODES = ("on_spot", "same_ward", "far_away")
+DECISIONS = ("confirm", "disagree", "fixed_now")
+
+
 def votes_view(c: Counter | None) -> dict:
+    """Vote totals, plus each decision per verified mode (the On spot / Nearby / Far away grid on the card)."""
     c = c or Counter()
     return {"confirm": c["confirm"], "disagree": c["disagree"], "fixed_now": c["fixed_now"], "total": c["total"],
-            "on_spot": sum(v for k, v in c.items() if k.endswith(":on_spot")),
-            "same_ward": sum(v for k, v in c.items() if k.endswith(":same_ward")),
-            "far_away": sum(v for k, v in c.items() if k.endswith(":far_away"))}
+            **{m: sum(c[f"{d}:{m}"] for d in DECISIONS) for m in MODES},
+            "by_mode": {m: {d: c[f"{d}:{m}"] for d in DECISIONS} for m in MODES}}
+
+
+def reporter_view(user: User | None) -> dict | None:
+    """Name only (UI decision: the card shows who posted before the vote). Reputation stays behind the vote."""
+    if user is None or user.state == "deleted" or not user.display_name:
+        return None
+    parts = user.display_name.replace("(DEMO)", "").split()
+    initials = "".join(p[0] for p in parts[:2]).upper() if parts else "?"
+    return {"display_name": user.display_name, "initials": initials}
 
 
 def report_card(ctx: ViewContext, r: Report) -> dict:
@@ -120,6 +138,7 @@ def report_card(ctx: ViewContext, r: Report) -> dict:
                     "created_at": my_vote.created_at.isoformat()} if my_vote else None,
         "can_vote": (ctx.viewer is not None and ctx.viewer.role == "citizen" and not mine and r.report_type == "civic"
                      and r.visibility == "visible" and (my_vote is None or my_vote.mode_verified != "on_spot")),
+        "reporter": reporter_view(ctx.users.get(r.user_id)) if r.user_id else None,
         "results_visible": False, "results": None,
     }
     if ctx.can_see_results(r):
@@ -128,7 +147,7 @@ def report_card(ctx: ViewContext, r: Report) -> dict:
         out["results_visible"] = True
         out["results"] = {
             **scores_view(r), "votes": votes_view(ctx.vote_counts.get(r.id)),
-            "resolved": r.event_id in ctx.resolved,
+            "resolved": r.event_id in ctx.resolved, "comments_count": ctx.comment_counts.get(r.id, 0),
             "reporter": {"display_name": reporter.display_name if reporter and reporter.state != "deleted" else None,
                          "reputation_display": to_display(rep.rep) if rep else None},
         }
