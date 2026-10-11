@@ -41,9 +41,12 @@ class ConsentIn(Strict):
 
 
 def masked_phone(phone: str | None) -> str | None:
+    """+8801712345678 → "+880 1XXX-XXX-X78" (the profile board's format)."""
     if not phone:
         return None
-    return phone[:7] + "XXX-X" + phone[-2:]
+    if phone.startswith("+880") and len(phone) == 14:
+        return f"+880 {phone[4]}XXX-XXX-X{phone[-2:]}"
+    return phone[:4] + "XXX-X" + phone[-2:]
 
 
 def _addresses(db: Session, user: User) -> list[dict]:
