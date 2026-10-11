@@ -51,14 +51,14 @@ function Badge({ n, className }) {
 }
 
 function DesktopBar({ module, items, active, badge }) {
-  const m = MODULE[module];
+  const mod = MODULE[module];
   const { user } = useApp();
   return (
     <div className="mx-auto hidden max-w-[1360px] px-5 pt-4 md:block">
       <div className="flex items-center gap-4 rounded-2xl border border-line/80 bg-white px-4 py-3 shadow-1">
-        <Link to={m.home} className="flex items-center gap-3">
-          <Logo icon={m.icon} />
-          <span className="display text-lg">{m.name}</span>
+        <Link to={mod.home} className="flex items-center gap-3">
+          <Logo icon={mod.icon} />
+          <span className="display text-lg">{mod.name}</span>
         </Link>
         <nav aria-label="Main" className={cx("flex flex-1 items-center gap-1", module === "pp" ? "ml-4" : "justify-center")}>
           <div className={cx("flex items-center gap-1", module === "pp" && "rounded-2xl border border-line/80 p-1")}>
@@ -96,17 +96,17 @@ function DesktopBar({ module, items, active, badge }) {
 
 // Phone top bar. Feed-like pages show the module mark; other pages show their own title (Alerts → "Green Guard").
 function PhoneBar({ module, title }) {
-  const m = MODULE[module];
+  const mod = MODULE[module];
   return (
     <header className="sticky top-0 z-30 bg-bg/95 backdrop-blur md:hidden">
       <div className="flex min-h-16 items-center gap-3 px-4">
         {title ? (
           <span className="display text-lg">{title}</span>
         ) : (
-          <Link to={m.home} className="flex items-center gap-3">
-            <Logo icon={m.icon} size="sm" />
+          <Link to={mod.home} className="flex items-center gap-3">
+            <Logo icon={mod.icon} size="sm" />
             <span className="leading-tight">
-              <span className="display block text-[17px]">{m.name}</span>
+              <span className="display block text-[17px]">{mod.name}</span>
               <span className="block text-xs text-primary">CivicPulse</span>
             </span>
           </Link>
