@@ -1,6 +1,11 @@
-# CivicPulse defence stack (spec §2). Batch 3: db, redis, api. nginx, worker and scheduler come in later batches.
-# Only the API port is published for now, and only on this laptop (127.0.0.1).
+# CivicPulse defence stack (spec §2): nginx (only public entry), api, worker, scheduler, db, redis.
+# Start:  docker compose up -d --build        Then open https://localhost (or https://<laptop LAN IP> on phones).
 name: civicpulse
+
+x-backend-env: &backend-env
+  DATABASE_URL: postgresql+psycopg2://civicpulse_app:${APP_DB_PASSWORD}@db:5432/civicpulse
+  REDIS_URL: redis://redis:6379/0
+  UPLOAD_DIR: /data/uploads
 
 services:
   db:
@@ -36,17 +41,79 @@ services:
       dockerfile: backend/Dockerfile
     env_file: .env
     environment:
-      DATABASE_URL: postgresql+psycopg2://civicpulse_app:${APP_DB_PASSWORD}@db:5432/civicpulse
+      <<: *backend-env
       MIGRATION_DATABASE_URL: postgresql+psycopg2://civicpulse_owner:${OWNER_DB_PASSWORD}@db:5432/civicpulse
-      REDIS_URL: redis://redis:6379/0
     depends_on:
       db: {condition: service_healthy}
       redis: {condition: service_healthy}
     volumes:
       - uploads:/data/uploads
+      - ./exports:/data/exports          # research exports (labelling, evaluation); gitignored
     ports:
-      - "127.0.0.1:8000:8000"
+      - "127.0.0.1:8000:8000"            # this laptop only, for `npm run dev` and debugging
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
     networks: [internal]
+
+  worker:
+    build:
+      context: .
+      dockerfile: backend/Dockerfile.worker
+      args:
+        TORCH_INDEX: ${TORCH_INDEX:-https://download.pytorch.org/whl/cpu}
+    image: civicpulse-worker
+    env_file: .env
+    environment:
+      <<: *backend-env
+      MODELS_DIR: /models
+    depends_on:
+      api: {condition: service_healthy}  # the API applies the migrations first
+    volumes:
+      - uploads:/data/uploads
+      - ./models:/models:ro              # safetensors weights from scripts/fetch_models.py (read-only, S2)
+    networks: [internal]
+
+  scheduler:
+    image: civicpulse-worker
+    command: ["python", "-m", "app.worker.scheduler"]
+    env_file: .env
+    environment:
+      <<: *backend-env
+    depends_on:
+      worker: {condition: service_started}
+    networks: [internal]
+
+  # One-off research tools with WRITE access to ./models (the worker itself mounts it read-only):
+  #   docker compose run --rm tools python -m scripts.fetch_models
+  tools:
+    image: civicpulse-worker
+    profiles: ["tools"]
+    env_file: .env
+    environment:
+      <<: *backend-env
+      MODELS_DIR: /models
+    volumes:
+      - ./models:/models
+      - ./data:/data/research:ro       # your private datasets (gitignored), e.g. data/e7_samples.csv
+      - ./exports:/data/exports
+    networks: [internal]
+
+  nginx:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    depends_on:
+      api: {condition: service_healthy}
+    ports:
+      - "443:443"
+      - "80:80"
+    volumes:
+      - ./docker/certs:/etc/nginx/certs:ro   # cert.pem + key.pem made with mkcert (docs/SETUP.md)
+      - ./tiles:/srv/tiles:ro                # optional base map pilot.pmtiles (docs/MAPS.md)
+    networks: [internal, edge]
 
 volumes:
   pgdata:
@@ -54,3 +121,4 @@ volumes:
 
 networks:
   internal:
+  edge:

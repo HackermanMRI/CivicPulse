@@ -1,20 +1,40 @@
+# Secrets: never commit real environment files or certificates
+.env
+.env.*
+!.env.example
+docker/certs/
+*.pem
+*.key
+
 # Python
 venv/
+.venv/
 __pycache__/
 *.pyc
-.env
+.pytest_cache/
 
-# Node
+# Node / frontend build
 node_modules/
 dist/
-.env.local
 
 # Editor / OS
 .vscode/
+.idea/
 .DS_Store
 
-# Uploaded files
+# Runtime data: uploads, exports, private datasets, map tiles
 backend/uploads/
-# Models and evaluation outputs
+/uploads/
+/exports/
+/data/
+/tiles/*.pmtiles
+
+# Model weights and evaluation outputs (prepared on your own machine, never committed)
 /models/
+*.safetensors
+*.pt
+*.pth
+*.bin
+*.onnx
+*.ckpt
 backend/eval_results/
