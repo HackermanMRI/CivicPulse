@@ -125,7 +125,7 @@ categories:
     impact: 0.9
     extent: 0.8
     urgency: 0.9
-    review_status: draft
+    review_status: reviewed
     clip_prompts: ["a photo of a flooded street with standing water"]
     text_prototypes:
       - "Water is standing on the road and people cannot walk."
@@ -137,8 +137,8 @@ categories:
     impact: 0.8
     extent: 0.6
     urgency: 0.9
-    review_status: draft
-    clip_prompts: ["a photo of a polluted river or canal with dirty water"]
+    review_status: reviewed
+    clip_prompts: ["a photo of a polluted river or canal with dirty water and waste"]
     text_prototypes:
       - "The canal water is black and smells bad."
       - "নদীর পানি কালো হয়ে গেছে, দুর্গন্ধ"
@@ -149,8 +149,8 @@ categories:
     impact: 0.8
     extent: 0.6
     urgency: 0.7
-    review_status: draft
-    clip_prompts: ["a photo of a damaged road with potholes"]
+    review_status: reviewed
+    clip_prompts: ["a photo of a damaged road with potholes and some holes filled with water"]
     text_prototypes:
       - "There is a big pothole in the middle of the road."
       - "রাস্তায় বড় গর্ত, গাড়ি চলতে পারে না"
@@ -161,7 +161,7 @@ categories:
     impact: 0.8
     extent: 0.6
     urgency: 0.7
-    review_status: draft
+    review_status: reviewed
     clip_prompts: ["a photo of cut down trees and tree stumps"]
     text_prototypes:
       - "Many trees were cut down beside the road."
@@ -173,8 +173,8 @@ categories:
     impact: 0.7
     extent: 0.6
     urgency: 0.8
-    review_status: draft
-    clip_prompts: ["a photo of a blocked or overflowing drain"]
+    review_status: reviewed
+    clip_prompts: ["a photo of a blocked or overflowing drain with garbage and dirty water"]
     text_prototypes:
       - "The drain is blocked and dirty water is overflowing."
       - "ড্রেন বন্ধ হয়ে ময়লা পানি উপচে পড়ছে"
@@ -185,8 +185,8 @@ categories:
     impact: 0.6
     extent: 0.7
     urgency: 0.8
-    review_status: draft
-    clip_prompts: ["a photo of a pile of garbage on the street"]
+    review_status: reviewed
+    clip_prompts: ["a photo of a pile of garbage on the street and street-side garbage bins overflowing with trash"]
     text_prototypes:
       - "Garbage has not been collected for days and it smells."
       - "কয়েকদিন ধরে ময়লা পরিষ্কার হয়নি"
@@ -197,8 +197,8 @@ categories:
     impact: 0.6
     extent: 0.4
     urgency: 0.7
-    review_status: draft
-    clip_prompts: ["a photo of a broken street light on a dark street"]
+    review_status: reviewed
+    clip_prompts: ["a photo of a street light on a busy street"]
     text_prototypes:
       - "The street light is broken and the road is dark at night."
       - "রাস্তার বাতি নষ্ট, রাতে অন্ধকার"
