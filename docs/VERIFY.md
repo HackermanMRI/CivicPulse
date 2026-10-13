@@ -8,7 +8,7 @@ with the output of `docker compose logs --tail 80 api worker`.
 - [ ] `curl.exe http://127.0.0.1:8000/api/health` → `"database": true`, `"migration": "0001"`, `"tables": 36`, `"categories": 7`.
 - [ ] `docker compose logs worker` shows `Listening on civicpulse`.
 - [ ] https://localhost opens the login page with no certificate warning.
-- [ ] Tests: 92 passed (RUN.md §8).
+- [ ] Tests: 93 passed (RUN.md §8).
 
 ## Accounts (as a new user, on a phone)
 - [ ] Sign-up: phone → 6-digit code shown on screen (DEV_MODE) → name + password → 3 permissions → areas → lands on the module picker.

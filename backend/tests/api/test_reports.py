@@ -302,3 +302,24 @@ def test_hotspots_carry_their_ward(citizens, db):
     assert h[0]["ward"]["name_en"] == "Test ward" and h[0]["n_users"] == 3
     pts = a.get("/api/insights/map", params={"days": 7}).json()["features"]
     assert pts == [] or "severity" in pts[0]["properties"]
+
+
+def test_notifications_split_by_module(citizens, db):
+    import uuid
+    from app.services.notify import notify
+    a, b = citizens(2)
+    civic_id = a.civic().json()["id"]
+    uid = uuid.UUID(a.id)
+    notify(db, uid, "price_alert", {"text": "Onion up 12%"})
+    notify(db, uid, "emerging_issue", {"text": "More garbage", "category": "Garbage", "ward": "Test ward"})
+    notify(db, uid, "own_report_status", {"text": "Your report is now Credible"}, uuid.UUID(civic_id))
+    db.commit()
+    kinds = lambda mod, tab: {n["kind"] for n in a.get("/api/notifications", params={"tab": tab, "module": mod}).json()["items"]}
+    assert kinds("price_patrol", "alerts") == {"price_alert"}
+    assert "price_alert" not in kinds("green_guard", "alerts") and "emerging_issue" in kinds("green_guard", "alerts")
+    assert kinds("green_guard", "notifications") == {"own_report_status"}        # a civic report's status
+    assert kinds("price_patrol", "notifications") == set()
+    assert a.get("/api/notifications/unread-count", params={"module": "price_patrol"}).json() == {"alerts": 1, "notifications": 0}
+    a.post("/api/notifications/read-all", params={"tab": "alerts", "module": "price_patrol"})
+    assert a.get("/api/notifications/unread-count", params={"module": "price_patrol"}).json()["alerts"] == 0
+    assert a.get("/api/notifications/unread-count", params={"module": "green_guard"}).json()["alerts"] >= 1   # untouched

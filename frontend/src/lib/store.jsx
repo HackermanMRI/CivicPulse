@@ -13,7 +13,7 @@ export function AppProvider({ children }) {
   const [toasts, setToasts] = useState([]);
   const [online, setOnline] = useState(navigator.onLine);
   const [offlineSince, setOfflineSince] = useState(null);
-  const [unread, setUnread] = useState({ alerts: 0, notifications: 0 });
+  const [unread, setUnread] = useState({ gg: { alerts: 0, notifications: 0 }, pp: { alerts: 0, notifications: 0 } });
   const [live, setLive] = useState(null); // last live notification (drives the ripple on the dashboard)
   const toastId = useRef(0);
 
@@ -55,7 +55,10 @@ export function AppProvider({ children }) {
   }, [loadMe]);
 
   const refreshUnread = useCallback(() => {
-    api("/api/notifications/unread-count").then(setUnread).catch(() => {});
+    // One count per module: the Green Guard bell never counts price alerts, and the other way round.
+    Promise.all(["green_guard", "price_patrol"].map((module) => api("/api/notifications/unread-count", { query: { module } })))
+      .then(([gg, pp]) => setUnread({ gg, pp }))
+      .catch(() => {});
   }, []);
 
   useEffect(() => {

@@ -107,7 +107,7 @@ export function Feed() {
           actions={
             <>
               <Button onClick={() => navigate("/gg/report")}>Report a problem</Button>
-              <Button kind="outline" onClick={() => navigate("/profile/areas")}>
+              <Button kind="outline" onClick={() => navigate("/gg/profile/areas")}>
                 Add an area
               </Button>
             </>
@@ -252,7 +252,7 @@ export function ReportForm() {
           <p className="max-w-sm text-[17px] leading-relaxed">We are checking it now. People in this ward are told about it, and you get a notification when its status changes.</p>
           <div className="flex w-full max-w-sm flex-col gap-3">
             <Button onClick={() => navigate("/gg/feed")}>Go to the feed</Button>
-            <Button kind="outline" onClick={() => navigate("/profile")}>
+            <Button kind="outline" onClick={() => navigate("/gg/profile")}>
               See my reports
             </Button>
           </div>

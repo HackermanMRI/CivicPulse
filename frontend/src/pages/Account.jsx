@@ -8,11 +8,15 @@ import { Shell } from "../components/Shell.jsx";
 import { Button, DemoBadge, Dialog, ErrorState, ScoreBar, Skeleton, StateBlock, StatusChip, Tabs, cx } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { ago, bdt, fmtDate, fmtRelDay, fmtTime, initials } from "../lib/format.js";
-import { Link, navigate } from "../lib/router.jsx";
+import { Link, MODULE_KEY, moduleFromPath, navigate, useRoute } from "../lib/router.jsx";
 import { useApp, useData } from "../lib/store.jsx";
 
-export function moduleOf(user) {
-  return user?.preferred_module === "price_patrol" ? "pp" : "gg";
+// The module comes from the URL (/gg/… or /pp/…), never from the preferred module, so Alerts and Profile stay in
+// the area the person opened them from.
+function useModuleRoute() {
+  const { path } = useRoute();
+  const module = moduleFromPath(path);
+  return { module, base: `/${module}`, key: MODULE_KEY[module] };
 }
 
 // ---------- alerts ----------
@@ -78,11 +82,11 @@ function AlertItem({ n, onOpen }) {
 }
 
 export function Alerts() {
-  const { user, unread, refreshUnread, live } = useApp();
-  const module = moduleOf(user);
+  const { unread, refreshUnread, live } = useApp();
+  const { module, key } = useModuleRoute();
   const [tab, setTab] = useState("alerts");
   const [open, setOpen] = useState(null);
-  const { data, error, loading, reload, setData } = useData(() => api("/api/notifications", { query: { tab } }), [tab, live?.id]);
+  const { data, error, loading, reload, setData } = useData(() => api("/api/notifications", { query: { tab, module: key } }), [tab, key, live?.id]);
 
   async function read(n) {
     if (!n.read) {
@@ -95,7 +99,7 @@ export function Alerts() {
     else if (n.kind === "emerging_issue") navigate("/gg/dashboard");
   }
   async function readAll() {
-    await api("/api/notifications/read-all", { method: "POST", query: { tab } }).catch(() => {});
+    await api("/api/notifications/read-all", { method: "POST", query: { tab, module: key } }).catch(() => {});
     reload();
     refreshUnread();
   }
@@ -111,19 +115,20 @@ export function Alerts() {
         </Button>
       </div>
       <Tabs
+        key={module}
         className="mt-3"
         value={tab}
         onChange={setTab}
         tabs={[
-          { value: "alerts", label: "Alerts", badge: unread.alerts },
-          { value: "notifications", label: "Notifications", badge: unread.notifications },
+          { value: "alerts", label: "Alerts", badge: unread[module]?.alerts },
+          { value: "notifications", label: "Notifications", badge: unread[module]?.notifications },
         ]}
         label="Alert lists"
       >
         <p className="mt-3 text-sm leading-relaxed text-primary">
-          Alerts: new reports in your areas and unusual activity.
+          {module === "pp" ? "Alerts: a product's verified price moved 10% or more in 7 days." : "Alerts: new reports in your areas and unusual activity."}
           <br />
-          Notifications: every status change on your own and pinned reports.
+          {module === "pp" ? "Notifications: every status change on the prices you reported." : "Notifications: every status change on your own and pinned reports."}
         </p>
         {loading && !data && (
           <div className="mt-5 space-y-3">
@@ -135,7 +140,9 @@ export function Alerts() {
         {error && <ErrorState error={error} onRetry={reload} title="Couldn't load alerts" />}
         {data && data.items.length === 0 && (
           <StateBlock icon="bell" title="All quiet">
-            {tab === "alerts" ? "New reports in your areas and unusual activity show up here." : "When one of your reports or a report you pinned changes status, you see it here."}
+            {module === "pp"
+              ? tab === "alerts" ? "Price changes of 10% or more show up here. Watch products on the Prices page to get them first." : "When a price you reported changes status, you see it here."
+              : tab === "alerts" ? "New reports in your areas and unusual activity show up here." : "When one of your reports or a report you pinned changes status, you see it here."}
           </StateBlock>
         )}
         {fresh.length > 0 && (
@@ -249,8 +256,8 @@ function Permissions({ open, onClose, consents }) {
 }
 
 export function Profile() {
-  const { user, signOut, toast } = useApp();
-  const module = moduleOf(user);
+  const { signOut, toast } = useApp();
+  const { module, base } = useModuleRoute();
   const [me, setMe] = useState(null);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
@@ -338,7 +345,7 @@ export function Profile() {
             <SectionHead
               title={type === "price" ? "My prices" : "My reports"}
               action={
-                <Link to="/profile/reports" className="min-h-11 content-center font-bold underline underline-offset-4">
+                <Link to={`${base}/profile/reports`} className="min-h-11 content-center font-bold underline underline-offset-4">
                   See all
                 </Link>
               }
@@ -358,7 +365,7 @@ export function Profile() {
             <SectionHead
               title="My areas"
               action={
-                <Link to="/profile/areas" className="min-h-11 content-center font-bold underline underline-offset-4">
+                <Link to={`${base}/profile/areas`} className="min-h-11 content-center font-bold underline underline-offset-4">
                   Edit
                 </Link>
               }
@@ -401,8 +408,7 @@ export function Profile() {
 
 // "See all": every report and price the user posted.
 export function MyReports() {
-  const { user } = useApp();
-  const module = moduleOf(user);
+  const { module } = useModuleRoute();
   const [type, setType] = useState(module === "pp" ? "price" : "civic");
   const [open, setOpen] = useState(null);
   const { data, error, loading, reload } = useData(() => api("/api/me/reports", { query: { type } }), [type]);
@@ -433,7 +439,7 @@ export function MyReports() {
 function BackTitle({ title }) {
   return (
     <div className="mb-2 flex items-center gap-2">
-      <button onClick={() => navigate("/profile")} className="-ml-2 grid size-11 place-items-center rounded-full hover:bg-soft/50" aria-label="Back to profile">
+      <button onClick={() => navigate(`/${moduleFromPath(location.pathname)}/profile`)} className="-ml-2 grid size-11 place-items-center rounded-full hover:bg-soft/50" aria-label="Back to profile">
         <Icon name="chevronLeft" className="size-6" strokeWidth={2.4} />
       </button>
       <h1 className="display text-[28px]">{title}</h1>
@@ -444,7 +450,7 @@ function BackTitle({ title }) {
 // Profile → My areas → Edit (same parts as sign-up step 5; changes save at once).
 export function EditAreas() {
   const { user, setUser, toast } = useApp();
-  const module = moduleOf(user);
+  const { module } = useModuleRoute();
   const [addresses, setAddresses] = useState(null);
   const [busy, setBusy] = useState(false);
   const wards = useData(() => api("/api/wards"), []);

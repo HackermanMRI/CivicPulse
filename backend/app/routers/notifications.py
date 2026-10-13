@@ -14,18 +14,33 @@ from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
-from sqlalchemy import func
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.config import settings
 from app.core.deps import _bearer, current_user, get_db
 from app.core.timeutil import now_utc
 from app.core.tokens import decode_token
-from app.models import Notification, User
+from app.models import Notification, Report, User
 
 router = APIRouter(prefix="/api", tags=["Notifications"])
 TABS = {"alerts": ("new_report_in_ward", "emerging_issue", "price_alert"),
         "notifications": ("own_report_status", "pinned_report_status")}
+Module = Literal["green_guard", "price_patrol"]
+# Which alert kinds belong to which module. Status notifications belong to the module of their report.
+MODULE_ALERTS = {"green_guard": ("new_report_in_ward", "emerging_issue"), "price_patrol": ("price_alert",)}
+MODULE_REPORT_TYPE = {"green_guard": "civic", "price_patrol": "price"}
+
+
+def _scoped(db: Session, user: User, tab: str, module: Module | None):
+    """The user's notifications for one tab, optionally only those of one module (Green Guard or Price Patrol)."""
+    q = db.query(Notification).filter(Notification.user_id == user.id)
+    if module is None:
+        return q.filter(Notification.kind.in_(TABS[tab]))
+    if tab == "alerts":
+        return q.filter(Notification.kind.in_(MODULE_ALERTS[module]))
+    of_type = select(Report.id).where(Report.report_type == MODULE_REPORT_TYPE[module])
+    return q.filter(Notification.kind.in_(TABS[tab]), Notification.report_id.in_(of_type))
 
 
 def _row(n: Notification) -> dict:
@@ -34,9 +49,10 @@ def _row(n: Notification) -> dict:
 
 
 @router.get("/notifications")
-def list_notifications(tab: Literal["alerts", "notifications"] = "alerts", limit: int = Query(30, ge=1, le=100),
-                       before: str | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
-    q = db.query(Notification).filter(Notification.user_id == user.id, Notification.kind.in_(TABS[tab]))
+def list_notifications(tab: Literal["alerts", "notifications"] = "alerts", module: Module | None = None,
+                       limit: int = Query(30, ge=1, le=100), before: str | None = None,
+                       user: User = Depends(current_user), db: Session = Depends(get_db)):
+    q = _scoped(db, user, tab, module)
     if before:
         from datetime import datetime
         try:
@@ -48,12 +64,9 @@ def list_notifications(tab: Literal["alerts", "notifications"] = "alerts", limit
 
 
 @router.get("/notifications/unread-count")
-def unread(user: User = Depends(current_user), db: Session = Depends(get_db)):
-    out = {}
-    for tab, kinds in TABS.items():
-        out[tab] = db.query(func.count(Notification.id)).filter(Notification.user_id == user.id, Notification.read_at.is_(None),
-                                                                Notification.kind.in_(kinds)).scalar()
-    return out
+def unread(module: Module | None = None, user: User = Depends(current_user), db: Session = Depends(get_db)):
+    return {tab: _scoped(db, user, tab, module).filter(Notification.read_at.is_(None))
+            .with_entities(func.count(Notification.id)).scalar() for tab in TABS}
 
 
 @router.post("/notifications/{notification_id}/read")
@@ -68,11 +81,12 @@ def mark_read(notification_id: uuid.UUID, user: User = Depends(current_user), db
 
 
 @router.post("/notifications/read-all")
-def mark_all(tab: Literal["alerts", "notifications"] = "alerts", user: User = Depends(current_user),
-             db: Session = Depends(get_db)):
-    db.query(Notification).filter(Notification.user_id == user.id, Notification.read_at.is_(None),
-                                  Notification.kind.in_(TABS[tab])).update({"read_at": now_utc()}, synchronize_session=False)
-    db.commit()
+def mark_all(tab: Literal["alerts", "notifications"] = "alerts", module: Module | None = None,
+             user: User = Depends(current_user), db: Session = Depends(get_db)):
+    ids = [i for i, in _scoped(db, user, tab, module).filter(Notification.read_at.is_(None)).with_entities(Notification.id).all()]
+    if ids:
+        db.query(Notification).filter(Notification.id.in_(ids)).update({"read_at": now_utc()}, synchronize_session=False)
+        db.commit()
     return {"ok": True}
 
 
