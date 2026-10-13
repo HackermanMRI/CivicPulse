@@ -208,10 +208,11 @@ clip_unrelated_prompt: "a photo of an ordinary scene with no civic problem"
 
 ml:
   clip_model: openai/clip-vit-base-patch32
-  text_encoder: intfloat/multilingual-e5-base      # final choice comes from E7 (P13)
+  text_encoder: kazalbrur/bangla-embed-e5-small-banglish      # final choice comes from E7 (P13)
   text_query_prefix: "query: "                       # e5 inputs must start with "query: "
   text_temperature: 0.01                             # open parameter B6: tune on the validation split
   encoder_candidates:
     - {name: intfloat/multilingual-e5-base, query_prefix: "query: "}
     - {name: sentence-transformers/LaBSE, query_prefix: ""}
     - {name: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2, query_prefix: ""}
+    - {name: kazalbrur/bangla-embed-e5-small-banglish, query_prefix: "query: "}
