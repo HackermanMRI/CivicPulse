@@ -20,7 +20,8 @@ The file is gitignored. The map credits "© OpenStreetMap contributors".
 
 ## Limits
 
-- No street or place names are drawn: labels need glyph files, which are not bundled. The two area buttons and the
-  hotspot "Show" buttons move the map without dragging (B15).
-- Layer names follow the Protomaps basemap schema (earth, landuse, water, roads, buildings). If a future build renames
-  them, the background still shows and the report layers still work.
+- Place names (towns, areas, neighbourhoods) are drawn in English, using `name:en` and falling back to the local name.
+  Road names are drawn from zoom 13, only for roads that have an English name (`name:en`). Many roads in Bangladesh
+  have none, so some roads stay unlabelled.
+- Bangla labels are not tested. The font files may not cover Bangla letters.
+- The two area buttons and the hotspot "Show" buttons move the map without dragging (B15).
