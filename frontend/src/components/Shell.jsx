@@ -54,7 +54,8 @@ function DesktopBar({ module, items, active, badge }) {
   const mod = MODULE[module];
   const { user } = useApp();
   return (
-    <div className="mx-auto hidden max-w-[1360px] px-5 pt-4 md:block">
+    <div className="sticky top-0 z-30 hidden bg-bg/95 backdrop-blur md:block">
+       <div className="mx-auto max-w-[1360px] px-5 pb-2 pt-4">
       <div className="flex items-center gap-4 rounded-2xl border border-line/80 bg-white px-4 py-3 shadow-1">
         <Link to={mod.home} className="flex items-center gap-3">
           <Logo icon={mod.icon} />
@@ -89,6 +90,7 @@ function DesktopBar({ module, items, active, badge }) {
           </Link>
         )}
         <SwitchPill module={module} />
+      </div>
       </div>
     </div>
   );
