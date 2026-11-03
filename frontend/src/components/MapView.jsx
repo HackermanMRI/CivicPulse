@@ -16,7 +16,7 @@ let protocolAdded = false;
 async function tilesAvailable() {
   try {
     const r = await fetch("/tiles/pilot.pmtiles", { method: "HEAD" });
-    return r.ok;
+    return r.ok && !(r.headers.get("content-type") || "").includes("text/html");
   } catch {
     return false;
   }
@@ -36,9 +36,20 @@ function baseStyle(withTiles) {
         id: "roads", type: "line", source: "protomaps", "source-layer": "roads",
         paint: { "line-color": ["match", ["get", "kind"], "highway", "#cfe0e0", "major_road", "#dbe8e8", "#ffffff"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 2.5, 17, 8] },
       },
+      {
+        id: "place-labels", type: "symbol", source: "protomaps", "source-layer": "places",
+        filter: ["in", ["get", "kind"], ["literal", ["locality", "macrohood", "neighbourhood"]]],
+        layout: {
+          "text-field": ["coalesce", ["get", "name:en"], ["get", "name"]],
+          "text-font": ["Noto Sans Medium"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 15, 15],
+          "text-max-width": 8,
+        },
+        paint: { "text-color": "#1c3d3d", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+      },
     );
   }
-  return { version: 8, sources, layers };
+  return { version: 8, glyphs: `${window.location.origin}/map-fonts/{fontstack}/{range}.pbf`, sources, layers };
 }
 
 function el(tag, cls, text) {
