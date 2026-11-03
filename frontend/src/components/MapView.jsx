@@ -1,7 +1,3 @@
-// MapLibre map for the dashboard (B2–B4, boards: Dashboard 2D, Dashboard 3D). Loaded lazily, only on map routes (B14).
-// Base map: a self-hosted Protomaps PMTiles extract at /tiles/pilot.pmtiles (B3). Without it the map still works on a
-// plain background (R35). No glyph files are bundled, so every label (cluster counts, hotspot scores) is an HTML marker.
-// Every map move has a button (B15): zoom, fit, rotate, tilt and reset; dragging is never required.
 import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import { Protocol } from "pmtiles";
@@ -47,6 +43,17 @@ function baseStyle(withTiles) {
         },
         paint: { "text-color": "#1c3d3d", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
       },
+            {
+        id: "road-labels", type: "symbol", source: "protomaps", "source-layer": "roads", minzoom: 13,
+        filter: ["all", ["has", "name:en"], ["in", ["get", "kind"], ["literal", ["highway", "major_road", "minor_road"]]]],
+        layout: {
+          "symbol-placement": "line",
+          "text-field": ["get", "name:en"],
+          "text-font": ["Noto Sans Regular"],
+          "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 17, 13],
+        },
+        paint: { "text-color": "#4a6b6b", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+      },
     );
   }
   return { version: 8, glyphs: `${window.location.origin}/map-fonts/{fontstack}/{range}.pbf`, sources, layers };
@@ -91,7 +98,7 @@ const MapView = forwardRef(function MapView({ points, grid, hotspots, mode, laye
     m.fitBounds(b, { padding: 60, maxZoom: 14.5, duration: animate && !reduceMotion() ? 500 : 0 });
   }
 
-  // HTML cluster markers (counts need text; no glyphs are bundled).
+ 
   function drawClusters() {
     const m = map.current;
     const store = markers.current.clusters;
