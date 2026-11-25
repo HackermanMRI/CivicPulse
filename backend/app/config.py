@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     JWT_ISSUER: str = "civicpulse"
     JWT_AUDIENCE: str = "civicpulse-app"
     DEV_MODE: bool = False                          # shows the mock OTP on screen (Q32); never on in production
+    OTP_TO_CONSOLE: bool = False                    # print each OTP in the api log so the host can read it out
     FRONTEND_ORIGIN: str = "https://localhost"     # comma-separated list, e.g. "https://localhost,https://192.168.0.105"
     UPLOAD_DIR: str = "/data/uploads"
     CONFIG_PATH: str | None = None                  # defaults to config/civicpulse.yaml

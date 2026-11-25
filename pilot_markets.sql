@@ -1,0 +1,35 @@
+INSERT INTO markets (name_en, name_bn, ward_id, location, radius_m, source, verified)
+SELECT v.name_en, v.name_bn,
+       (SELECT w.id FROM wards w WHERE w.geom IS NOT NULL AND ST_Covers(w.geom, p.g) ORDER BY w.id LIMIT 1),
+       p.g::geography, 150, 'osm'::market_source, false
+FROM (VALUES
+  ('Mofiz Market', 'মফিজ বাজার', 90.5022820, 23.6172207),
+  ('Gulsan Market', 'গুলশান মার্কেট', 90.5020260, 23.6148078),
+  ('Kanchpur Kacha Bazar', 'Kanchpur Kacha Bazar', 90.5219758, 23.7067756),
+  ('Bamboo Market', 'Bamboo Market', 90.4796809, 23.6939223),
+  ('Mintu Chattar Supermarket', 'Mintu Chattar Supermarket', 90.4753762, 23.6954801),
+  ('Modonpur Bazar', 'Modonpur Bazar', 90.5471452, 23.6905107),
+  ('Hazi Store', 'Hazi Store', 90.5459234, 23.6903203),
+  ('Chowdhurygaon Bazar', 'Chowdhurygaon Bazar', 90.5739190, 23.6236389),
+  ('Kazi Para Bazar', 'Kazi Para Bazar', 90.5763511, 23.6847723),
+  ('Forajikanda Bazar', 'Forajikanda Bazar', 90.5158223, 23.5963991),
+  ('Sonakanda Hat', 'Sonakanda Hat', 90.5090511, 23.6028363),
+  ('Sikandar Ali Super Maket', 'Sikandar Ali Super Maket', 90.4757143, 23.6951724),
+  ('Almas Point', 'Almas Point', 90.5015833, 23.6152714),
+  ('Power Station Cooperative Market Shiddhirganj Power Station Market', 'বালুর মাঠ', 90.5188745, 23.6829356),
+  ('Amir Super Market', 'আমির সুপার মার্কেট', 90.4735635, 23.6384893),
+  ('Ranima Plazza, Shibu Market', 'Ranima Plazza, Shibu Market', 90.4934847, 23.6441126),
+  ('Haji Ali Ahamed Super Market', 'Haji Ali Ahamed Super Market', 90.5107729, 23.6392438),
+  ('Sahi Market', 'Sahi Market', 90.4968306, 23.6288086),
+  ('Friends Market', 'ফ্রেন্ডস মার্কেট', 90.5036867, 23.6192172),
+  ('Asgar Super Market', 'আসগর সুপার মার্কেট', 90.5035611, 23.6158947),
+  ('DIT Market', 'ডিআইটি মার্কেট', 90.5018750, 23.6137091),
+  ('F Rahman Super Market', 'এফ রহমান সুপার মার্কেট', 90.5021993, 23.6140256),
+  ('Mamun Super Market', 'Mamun Super Market', 90.4757593, 23.6329873),
+  ('High Super Market', 'উচ্চ সুপার মার্কেট', 90.5142684, 23.6893797),
+  ('1 No. Shukkur Super Market', '1 No. Shukkur Super Market', 90.5143190, 23.6886891),
+  ('Bata Shop', 'বাটা দোকান', 90.5191268, 23.6734852),
+  ('Narayanganj Hakars Markert', 'Narayanganj Hakars Markert', 90.5012612, 23.6240952),
+  ('City Madhabi Plaza', 'সিটি মাধবী প্লাজা', 90.5010323, 23.6238197)
+) AS v(name_en, name_bn, lon, lat)
+CROSS JOIN LATERAL (SELECT ST_SetSRID(ST_MakePoint(v.lon, v.lat), 4326) AS g) AS p;

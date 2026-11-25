@@ -98,6 +98,8 @@ def _send_otp(db: Session, phone: str, purpose: str) -> dict:
     db.add(OtpCode(phone=phone, purpose=purpose, code_hash=_code_hash(phone, code),
                    expires_at=now_utc() + timedelta(minutes=p.expiry_minutes)))
     db.commit()
+    if settings.OTP_TO_CONSOLE:
+        print(f"[OTP] {purpose} {phone} code={code}", flush=True)
     out = {"sent": True, "expires_in": p.expiry_minutes * 60}
     if settings.DEV_MODE:
         out["dev_code"] = code   # mock OTP for the defence (Q32); real SMS gateway is future work
