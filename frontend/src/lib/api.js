@@ -108,6 +108,8 @@ export async function api(path, { method = "GET", body, form, query, retry = tru
 
 // Photos are behind authorisation, so <img src> cannot load them directly; fetch them as blobs.
 const photoCache = new Map();
+const photoReady = new Map(); // path -> object URL, once loaded (lets a pop-up show a photo on its first frame)
+export const photoUrlSync = (path) => (path ? photoReady.get(path) || null : null);
 export async function photoUrl(path) {
   if (!path) return null;
   if (photoCache.has(path)) return photoCache.get(path);
@@ -120,7 +122,9 @@ export async function photoUrl(path) {
       r = await fetch(path, { headers: { ...headers, Authorization: `Bearer ${accessToken}` }, credentials: "same-origin" });
     }
     if (!r.ok) throw new ApiError(r.status, "Photo not available");
-    return URL.createObjectURL(await r.blob());
+    const url = URL.createObjectURL(await r.blob());
+    photoReady.set(path, url);
+    return url;
   })();
   photoCache.set(path, p);
   p.catch(() => photoCache.delete(path));
@@ -130,4 +134,5 @@ export async function photoUrl(path) {
 export function clearPhotoCache() {
   photoCache.forEach((p) => p.then((u) => URL.revokeObjectURL(u)).catch(() => {}));
   photoCache.clear();
+  photoReady.clear();
 }

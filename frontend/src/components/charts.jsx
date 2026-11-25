@@ -14,8 +14,8 @@ export function DayBars({ data, height = 150 }) {
           <span
             key={d.date}
             title={`${fmtShort(d.date)}: ${d.count}${d.alert ? " (emerging-issue alert)" : ""}`}
-            className={cx("min-w-0 flex-1 rounded-t-[3px]", d.alert ? "bg-warn" : i === data.length - 1 ? "bg-primary" : "bg-line")}
-            style={{ height: `${Math.max(d.count ? 4 : 0, (d.count / max) * 100)}%` }}
+            className={cx("cp-grow min-w-0 flex-1 rounded-t-[3px]", d.alert ? "bg-warn" : i === data.length - 1 ? "bg-primary" : "bg-line")}
+            style={{ height: `${Math.max(d.count ? 4 : 0, (d.count / max) * 100)}%`, animationDelay: `${Math.min(i, 40) * 12}ms` }}
           />
         ))}
       </div>
@@ -54,7 +54,7 @@ export function Sparkline({ points, className = "h-10 w-28" }) {
   const d = points.map((p, i) => `${i ? "L" : "M"}${(i / (points.length - 1)) * 100},${36 - ((p.price - min) / span) * 32}`).join(" ");
   return (
     <svg viewBox="0 0 100 40" preserveAspectRatio="none" className={className} role="img" aria-label={`Verified prices from ${min} to ${max} taka`}>
-      <path d={d} fill="none" strokeWidth="2.5" className="stroke-primary" vectorEffect="non-scaling-stroke" />
+      <path d={d} pathLength="1" fill="none" strokeWidth="2.5" className="cp-draw stroke-primary" vectorEffect="non-scaling-stroke" />
     </svg>
   );
 }
@@ -100,7 +100,18 @@ export function PriceChart({ points, reference, alertDate, alertLabel }) {
           </g>
         ))}
         <path d={path("raw_median")} fill="none" strokeWidth="2" strokeDasharray="6 5" className="stroke-line" />
-        <path d={path("verified_price")} fill="none" strokeWidth="3" strokeLinejoin="round" className="stroke-primary" />
+        {points.every((p) => p.verified_price != null) && points.length > 1 && (
+          <>
+            <defs>
+              <linearGradient id="cp-area" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0" stopColor="var(--primary)" stopOpacity="0.22" />
+                <stop offset="1" stopColor="var(--primary)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <path d={`${path("verified_price")} L${x(points.length - 1)},${H - 30} L${x(0)},${H - 30} Z`} fill="url(#cp-area)" className="cp-fade" />
+          </>
+        )}
+        <path d={path("verified_price")} pathLength="1" fill="none" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round" className="cp-draw stroke-primary" />
         {lastIdx >= 0 && <circle cx={x(lastIdx)} cy={y(points[lastIdx].verified_price)} r="5.5" className="fill-primary" />}
         {alertY != null && (
           <g>

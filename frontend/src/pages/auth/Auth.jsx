@@ -1,5 +1,6 @@
 // Login, sign-up (phone → code → name & password → permissions → areas), forgot password and the module picker
 // (boards: Login, Module picker, Sign-up steps 2/4/5; C2, C7, W1).
+import { m } from "motion/react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { AreaEditor } from "../../components/Areas.jsx";
 import { Icon, Logo } from "../../components/icons.jsx";
@@ -8,6 +9,7 @@ import { Button, Field, StepBar, cx, inputBase, inputCls } from "../../component
 import { api } from "../../lib/api.js";
 import { Link, navigate } from "../../lib/router.jsx";
 import { useApp } from "../../lib/store.jsx";
+import { enter, pop, spring, tap } from "../../lib/motion.js";
 
 // ---------- shared parts ----------
 
@@ -27,12 +29,15 @@ function contour(cx0, cy0, rings, base, seed) {
 }
 const CONTOURS = [...contour(330, 110, 9, 24, 1.3), ...contour(-10, 600, 8, 30, 4.1)];
 
+// The lines breathe very slowly (one transform on the whole group, 24 s per cycle) and draw in once on load.
 function Contours() {
   return (
     <svg className="pointer-events-none absolute inset-0 size-full" viewBox="0 0 400 860" preserveAspectRatio="xMidYMin slice" aria-hidden>
-      {CONTOURS.map((d, i) => (
-        <path key={i} d={d} fill="none" stroke="var(--line)" strokeOpacity="0.55" strokeWidth="1.2" />
-      ))}
+      <g className="origin-center animate-[cp-breathe_24s_ease-in-out_infinite]">
+        {CONTOURS.map((d, i) => (
+          <path key={i} d={d} pathLength="1" fill="none" stroke="var(--line)" strokeOpacity="0.55" strokeWidth="1.2" className="cp-draw" style={{ animationDelay: `${(i % 9) * 60}ms` }} />
+        ))}
+      </g>
     </svg>
   );
 }
@@ -46,7 +51,7 @@ export function toE164(raw) {
 }
 function PhoneInput({ id, value, onChange, disabled, invalid }) {
   return (
-    <div className={cx("flex min-h-[52px] overflow-hidden rounded-lg border-[1.5px] bg-white focus-within:border-ink focus-within:ring-1 focus-within:ring-ink", invalid ? "border-err" : "border-line")}>
+    <div className={cx("flex min-h-[52px] overflow-hidden rounded-lg border-[1.5px] bg-surface focus-within:border-ink focus-within:ring-1 focus-within:ring-ink", invalid ? "border-err" : "border-line")}>
       <span className="grid place-items-center border-r-[1.5px] border-line bg-soft/40 px-3.5 text-[17px] font-bold">+880</span>
       <input
         id={id}
@@ -123,7 +128,7 @@ function CodeBoxes({ value, onChange, invalid, id }) {
             <span
               key={i}
               className={cx(
-                "num grid aspect-[5/6] place-items-center rounded-lg border-[1.5px] bg-white text-2xl font-bold",
+                "num grid aspect-[5/6] place-items-center rounded-lg border-[1.5px] bg-surface text-2xl font-bold",
                 current ? "border-ink ring-1 ring-ink" : invalid && value.length === 6 ? "border-err" : value[i] ? "border-line" : "border-line/70",
               )}
             >
@@ -238,11 +243,24 @@ export function Login() {
       <Contours />
       <div className="relative flex flex-1 flex-col">
         <div className="mt-14 flex flex-col items-center text-center">
-          <Logo size="lg" />
-          <h1 className="display mt-5 text-[32px] leading-10">CivicPulse</h1>
-          <p className="mt-3 text-[17px] leading-relaxed text-primary">Report civic problems and market prices. See what the evidence says.</p>
+          <m.span className="cp-pulse relative rounded-[18px]" initial={{ scale: 0.6, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={pop}>
+            <Logo size="lg" className="shadow-[0_18px_40px_-14px_var(--primary)]" />
+          </m.span>
+          <m.h1 className="wide mt-5 text-[36px] leading-10" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...enter(0.32), delay: 0.12 }}>
+            CivicPulse
+          </m.h1>
+          <m.p className="mt-3 text-[17px] leading-relaxed text-primary" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...enter(0.32), delay: 0.22 }}>
+            Report civic problems and market prices. See what the evidence says.
+          </m.p>
         </div>
-        <form onSubmit={submit} className="mt-8 space-y-4 rounded-2xl border border-line/80 bg-white p-5 shadow-1" noValidate={false}>
+        <m.form
+          onSubmit={submit}
+          className="mt-8 space-y-4 rounded-3xl border border-hair bg-surface p-5 shadow-3"
+          noValidate={false}
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ ...spring, delay: 0.28 }}
+        >
           <Field label="Phone number" id="phone">
             <PhoneInput id="phone" value={phone} onChange={setPhone} disabled={Boolean(otp)} invalid={Boolean(error)} />
           </Field>
@@ -271,7 +289,7 @@ export function Login() {
               Create new account
             </Button>
           </div>
-        </form>
+        </m.form>
         <div className="mt-auto space-y-1 pt-10 text-center text-sm text-primary">
           <p>You stay logged in on this device for up to 30 days.</p>
           <p>Email is optional. You can add it later in your profile.</p>
@@ -496,10 +514,10 @@ export function Signup() {
           </StepTitle>
           <div className="mt-6 space-y-3">
             {CONSENTS.map(([k, title, tag, text]) => (
-              <label key={k} htmlFor={`c-${k}`} className={cx("flex cursor-pointer gap-3 rounded-2xl border-[1.5px] bg-white p-4", consents[k] ? "border-ink/80" : "border-line")}>
+              <label key={k} htmlFor={`c-${k}`} className={cx("flex cursor-pointer gap-3 rounded-2xl border-[1.5px] bg-surface p-4", consents[k] ? "border-ink/80" : "border-line")}>
                 <span className="relative mt-0.5 grid size-7 shrink-0 place-items-center">
-                  <input id={`c-${k}`} type="checkbox" className="peer absolute inset-0 cursor-pointer appearance-none rounded-md border-[1.5px] border-ink/60 bg-white checked:border-primary checked:bg-primary" checked={consents[k]} onChange={(e) => setConsents({ ...consents, [k]: e.target.checked })} />
-                  <Icon name="check" className="pointer-events-none relative size-5 text-white opacity-0 peer-checked:opacity-100" strokeWidth={3} />
+                  <input id={`c-${k}`} type="checkbox" className="peer absolute inset-0 cursor-pointer appearance-none rounded-md border-[1.5px] border-ink/60 bg-surface checked:border-primary checked:bg-primary" checked={consents[k]} onChange={(e) => setConsents({ ...consents, [k]: e.target.checked })} />
+                  <Icon name="check" className="pointer-events-none relative size-5 text-on-primary opacity-0 peer-checked:opacity-100" strokeWidth={3} />
                 </span>
                 <span className="min-w-0 flex-1">
                   <span className="flex flex-wrap items-center justify-between gap-2">
@@ -651,17 +669,27 @@ export function ModulePicker() {
       <p className="mt-2 text-[15px] leading-relaxed text-primary">We will open this one every time you log in. You can switch any time with the button at the top right.</p>
       <div className="mt-6 grid gap-5">
         {cards.map(([mod, value, icon, title, text, cta]) => (
-          <button key={mod} data-module={mod} onClick={() => pick(value)} className="group rounded-[22px] bg-primary p-6 text-left text-white shadow-2 transition-[filter] duration-150 hover:brightness-105">
-            <span className="grid size-14 place-items-center rounded-2xl bg-white/95 text-primary">
+          <m.button
+            key={mod}
+            data-module={mod}
+            onClick={() => pick(value)}
+            initial={{ opacity: 0, y: 24 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ ...spring, delay: mod === "gg" ? 0.1 : 0.18 }}
+            whileTap={tap}
+            className="group relative overflow-hidden rounded-[26px] bg-primary p-6 text-left text-on-primary shadow-[0_20px_40px_-18px_var(--primary)] transition-[filter] duration-150 hover:brightness-105"
+          >
+            <span className="pointer-events-none absolute -right-10 -top-10 size-44 rounded-full bg-glow/30 blur-2xl" aria-hidden />
+            <span className="grid size-14 place-items-center rounded-2xl bg-on-primary/95 text-primary">
               <Icon name={icon} className="size-7" />
             </span>
             <span className="display mt-5 block text-[26px]">{title}</span>
-            <span className="mt-3 block text-[17px] leading-relaxed text-white/95">{text}</span>
+            <span className="mt-3 block text-[17px] leading-relaxed text-on-primary/95">{text}</span>
             <span className="mt-5 flex items-center gap-2 font-bold text-soft">
               {cta}
               <Icon name="arrowRight" className="size-5 transition-transform duration-150 group-hover:translate-x-0.5" />
             </span>
-          </button>
+          </m.button>
         ))}
       </div>
     </Plain>

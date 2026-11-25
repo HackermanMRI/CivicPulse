@@ -268,6 +268,34 @@ def reinstate(user_id: uuid.UUID, body: Reason, request: Request, admin: User = 
     return _user_brief(db, _set_state(db, admin, user_id, "active", body.reason, client_ip(request)))
 
 
+class ProfileClear(Reason):
+    fields: list[Literal["avatar", "bio", "occupation", "website"]] = Field(min_length=1, max_length=4)
+
+
+@router.post("/users/{user_id}/clear-profile")
+def clear_profile(user_id: uuid.UUID, body: ProfileClear, request: Request, admin: User = Depends(require_admin),
+                  db: Session = Depends(get_db)):
+    """Moderation for public profile content (UI v2): remove an abusive photo or text. Needs a reason; audited."""
+    from app.services import photos
+
+    user = db.get(User, user_id)
+    if user is None or user.role != "citizen":
+        raise HTTPException(status_code=404, detail="Not found")
+    before = {f: bool(getattr(user, "avatar_path" if f == "avatar" else f)) for f in body.fields}
+    old_avatar = user.avatar_path if "avatar" in body.fields else None
+    for f in body.fields:
+        if f == "avatar":
+            user.avatar_path = None
+            user.avatar_updated_at = now_utc()
+        else:
+            setattr(user, f, None)
+    audit(db, actor_id=admin.id, action="user.clear_profile", entity="user", entity_id=user.id, before=before,
+          after={f: False for f in body.fields}, reason=body.reason, ip=client_ip(request))
+    db.commit()
+    photos.remove_file(old_avatar)
+    return _user_brief(db, user)
+
+
 # ---------------- audit log (W8 step 5) ----------------
 
 @router.get("/audit")

@@ -1,13 +1,15 @@
 // Green Guard: ward feed with the pinned-reports bar, the pinned list and the 5-step report form
 // (boards: Green Guard feed, States, Report form step 4; W2, W3, T3, T6).
-import { m } from "motion/react";
-import { useEffect, useRef, useState } from "react";
+import { AnimatePresence, m } from "motion/react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { flushSync } from "react-dom";
 import { Camera, ensureFreshToken } from "../components/Camera.jsx";
 import { Icon, categoryIcon } from "../components/icons.jsx";
-import { ReportCard, ReportDialog } from "../components/Report.jsx";
+import { ReportCard, ReportDialog, catStyle } from "../components/Report.jsx";
 import { Shell } from "../components/Shell.jsx";
-import { Button, CardSkeleton, enter, ErrorState, FormHeader, StateBlock, StepBar, cx, textareaCls, useNow } from "../components/ui.jsx";
-import { api } from "../lib/api.js";
+import { Button, CardSkeleton, ErrorState, FormHeader, StateBlock, StepBar, cx, textareaCls, useNow } from "../components/ui.jsx";
+import { api, photoUrlSync } from "../lib/api.js";
+import { enter, exit, pop, stagger } from "../lib/motion.js";
 import { fmtLongStamp, fmtTime } from "../lib/format.js";
 import { getPosition } from "../lib/geo.js";
 import { Link, navigate } from "../lib/router.jsx";
@@ -17,34 +19,57 @@ function useCategories() {
   return useData(() => api("/api/categories"), []);
 }
 
-function CardList({ items, setItems, onPin }) {
-  const [open, setOpen] = useState(null); // { id, mode, focus }
-  const replace = (r) => {
-    const before = items.find((x) => x.id === r.id);
-    if (before && r.saved !== undefined && before.saved !== r.saved) onPin?.(r.saved ? 1 : -1);
-    setItems(items.map((x) => (x.id === r.id ? { ...x, ...r } : x)));
-  };
+export function CardList({ items, setItems, onPin }) {
+  const [open, setOpen] = useState(null); // { id, mode, focus, seed, instant }
+  const [vtId, setVtId] = useState(null); // the card whose photo is about to morph into the pop-up
+  // Stable handlers (cards are memoised): they read the latest list through a ref.
+  const latest = useRef({ items, setItems, onPin });
+  latest.current = { items, setItems, onPin };
+  const replace = useCallback((r) => {
+    const { items: list, setItems: set, onPin: pin } = latest.current;
+    const before = list.find((x) => x.id === r.id);
+    if (before && r.saved !== undefined && before.saved !== r.saved) pin?.(r.saved ? 1 : -1);
+    set(list.map((x) => (x.id === r.id ? { ...x, ...r } : x)));
+  }, []);
+  const onSaved = useCallback((r, saved) => replace({ ...r, saved }), [replace]);
+  // B6 shared photo: name the tapped card's photo, then let the browser morph it into the pop-up's photo.
+  // Only when the photo is already on screen, the browser supports View Transitions and motion is not reduced.
+  const openReport = useCallback((r, mode, focus) => {
+    const next = { id: r.id, mode, focus, seed: r };
+    const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches || document.documentElement.dataset.motion === "reduce";
+    if (!document.startViewTransition || reduce || !photoUrlSync(r.photo_url)) return setOpen(next);
+    flushSync(() => setVtId(r.id));
+    document.startViewTransition(() =>
+      flushSync(() => {
+        setVtId(null);
+        setOpen({ ...next, instant: true });
+      }),
+    );
+  }, []);
   return (
     <>
-      <div className="grid gap-4">
+      <div className="grid gap-5">
         {items.map((r, i) => (
-          // Stagger 40 ms, at most 6 items (motion tokens); later pages appear without delay.
-          <m.div key={r.id} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ ...enter(), delay: Math.min(i % 10, 5) * 0.04 }}>
-            <ReportCard report={r} onOpen={(x, mode, focus) => setOpen({ id: x.id, mode, focus })} onSaved={(saved) => replace({ ...r, saved })} />
+          // Stagger 40 ms, at most 6 items (motion tokens); later pages appear without delay. Cards further down
+          // rise in as they scroll into view (CSS scroll-driven, where supported).
+          <m.div key={r.id} className={i > 1 ? "cp-rise" : undefined} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={stagger(i % 10)}>
+            <ReportCard report={r} onOpen={openReport} onSaved={onSaved} vtName={vtId === r.id ? "report-photo" : undefined} />
           </m.div>
         ))}
       </div>
-      <ReportDialog id={open?.id} initialMode={open?.mode} focus={open?.focus} onClose={() => setOpen(null)} onChanged={(full) => replace(full)} />
+      <ReportDialog id={open?.id} initialMode={open?.mode} focus={open?.focus} seed={open?.seed} instant={open?.instant} onClose={() => setOpen(null)} onChanged={(full) => replace(full)} />
     </>
   );
 }
 
 function PinnedBar({ count }) {
   return (
-    <Link to="/gg/pinned" className="mb-4 flex min-h-12 items-center gap-2.5 rounded-xl bg-soft/80 px-4 font-bold hover:bg-soft">
-      <Icon name="pinFilled" className="size-5" />
+    <Link to="/gg/pinned" className="press mb-5 flex min-h-12 items-center gap-2.5 rounded-2xl border border-hair bg-surface px-4 font-bold shadow-1 hover:bg-soft/30">
+      <span className="grid size-8 place-items-center rounded-xl bg-primary/12 text-primary">
+        <Icon name="pinFilled" className="size-[18px]" />
+      </span>
       <span className="flex-1">Pinned Reports</span>
-      <span className="num flex items-center">
+      <span className="num flex items-center text-muted">
         {count ?? ""}
         <Icon name="chevronRight" className="size-5" strokeWidth={2.4} />
       </span>
@@ -52,12 +77,194 @@ function PinnedBar({ count }) {
   );
 }
 
+// The feed's signature: the area name in Anek Bangla's widest cut and a live pulse line ("a report is a pulse from
+// a place"). The line draws itself once, then a bright blip keeps running along it. Numbers are aggregates for the
+// whole area (shown to everyone signed in, X1), never one report's result.
+function AreaPulse({ wards, names }) {
+  const week = useData(
+    () =>
+      wards.length
+        ? Promise.all(wards.map((w) => api("/api/insights/summary", { query: { days: 7, ward_id: w, status: "all", show_resolved: true } }))).then((all) => ({
+            reports: all.reduce((n, x) => n + (x.in_view || 0), 0),
+            fixed: all.reduce((n, x) => n + (x.resolved_events || 0), 0),
+          }))
+        : Promise.resolve(null),
+    [wards.join(",")],
+  );
+  const title = names.length === 1 ? names[0] : names.length > 1 ? `Your ${names.length} areas` : "Your area";
+  const path = "M0 22 H70 L80 22 L88 6 L98 34 L106 14 L114 22 H170 L178 22 L184 12 L192 30 L198 22 H260";
+  return (
+    <section className="mb-4 mt-1">
+      <div className="flex items-center gap-3">
+        <svg viewBox="0 0 260 40" preserveAspectRatio="none" className="cp-pulse-line h-9 flex-1 text-primary" aria-hidden>
+          <path d={path} pathLength="1" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" />
+          <path className="blip" d={path} pathLength="1" fill="none" stroke="var(--glow)" strokeWidth="3.4" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+        <span className="inline-flex items-center gap-2 text-[14px] font-extrabold">
+          <span className="cp-live-dot" aria-hidden />
+          Live
+        </span>
+      </div>
+      <h1 className="wide mt-1 text-[32px] leading-[1.02]">{title}</h1>
+      <p className="num mt-1.5 text-[15px] text-muted">
+        {week.data ? (
+          <>
+            <b className="text-ink">{week.data.reports}</b> report{week.data.reports === 1 ? "" : "s"} this week
+            {week.data.fixed > 0 && (
+              <>
+                {" "}
+                · <b className="text-ink">{week.data.fixed}</b> fixed
+              </>
+            )}
+          </>
+        ) : (
+          <span className="inline-block h-4 w-44 align-middle">
+            <span className="cp-skeleton block h-4 rounded-md" />
+          </span>
+        )}
+      </p>
+    </section>
+  );
+}
+
+// Swipeable hotspots in the person's areas (public aggregates). Tap → the dashboard map at that spot.
+function HotspotRail({ wards }) {
+  const hs = useData(() => api("/api/insights/hotspots"), []);
+  const mine = (hs.data || []).filter((h) => h.ward && wards.includes(h.ward.id)).slice(0, 8);
+  if (!mine.length) return null;
+  return (
+    <section className="mb-5" aria-label="Hotspots in your areas">
+      <div className="-mx-4 flex snap-x snap-mandatory gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none]">
+        {mine.map((h, i) => (
+          <m.button
+            key={h.id}
+            style={catStyle(h.category.code)}
+            onClick={() => navigate(`/gg/dashboard?lat=${h.lat}&lon=${h.lon}`)}
+            initial={{ opacity: 0, x: 24 }}
+            animate={{ opacity: 1, x: 0 }}
+            transition={stagger(i, 0.1)}
+            className={cx(
+              "press flex w-[158px] shrink-0 snap-start flex-col rounded-[20px] p-3.5 text-left",
+              i === 0 ? "bg-gradient-to-br from-cat to-[color-mix(in_srgb,var(--cat)_55%,black)] text-white shadow-[0_14px_28px_-14px_var(--cat)]" : "border border-hair bg-surface shadow-1",
+            )}
+          >
+            <span className="flex items-center justify-between">
+              <span className="num text-[28px] font-extrabold leading-none">{h.n_reports}</span>
+              <span className={cx("grid size-8 place-items-center rounded-xl", i === 0 ? "bg-white/20" : "bg-cat/12 text-cat-text")}>
+                <Icon name={categoryIcon(h.category.code)} className="size-[18px]" strokeWidth={2.4} />
+              </span>
+            </span>
+            <span className="mt-2 text-[14px] font-bold leading-snug">
+              {h.category.name_en} hotspot
+            </span>
+            <span className={cx("mt-1 text-[12.5px]", i === 0 ? "text-white/85" : "text-muted")}>
+              {h.ward.name_en} · {h.n_users} people
+            </span>
+          </m.button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+// "3 new reports · tap to see": counts live new-report notifications for this module while the feed is open.
+function LivePill({ count, onShow }) {
+  return (
+    <AnimatePresence>
+      {count > 0 && (
+        <m.button
+          initial={{ opacity: 0, y: -16, scale: 0.9 }}
+          animate={{ opacity: 1, y: 0, scale: 1, transition: pop }}
+          exit={{ opacity: 0, y: -10, transition: exit() }}
+          onClick={onShow}
+          className="glass fixed left-1/2 top-[calc(76px+env(safe-area-inset-top))] z-40 flex h-10 -translate-x-1/2 items-center gap-2 rounded-full px-4 text-[14px] font-bold md:top-24"
+        >
+          <span className="cp-live-dot" aria-hidden />
+          {count} new report{count === 1 ? "" : "s"} · tap to see
+        </m.button>
+      )}
+    </AnimatePresence>
+  );
+}
+
+// Pull down at the top of the feed to reload it (phones). Only the indicator and the list move (transform), and the
+// browser's own pull-to-reload is switched off while the feed is open so the two never fight.
+function usePullToRefresh(onRefresh) {
+  const [pull, setPull] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const start = useRef(null);
+  const pullRef = useRef(0);
+  useEffect(() => {
+    const root = document.documentElement;
+    const before = root.style.overscrollBehaviorY;
+    root.style.overscrollBehaviorY = "contain";
+    const down = (e) => {
+      start.current = window.scrollY <= 0 && !busy ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+    };
+    const move = (e) => {
+      if (start.current == null) return;
+      const dy = e.touches[0].clientY - start.current.y;
+      const dx = e.touches[0].clientX - start.current.x;
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 8) {
+        start.current = null; // a sideways swipe (the hotspot rail), not a pull
+        pullRef.current = 0;
+        setPull(0);
+        return;
+      }
+      const v = dy > 0 ? Math.min(110, dy * 0.5) : 0;
+      pullRef.current = v;
+      setPull(v);
+    };
+    const up = async () => {
+      if (start.current == null) return;
+      start.current = null;
+      if (pullRef.current >= 64) {
+        setBusy(true);
+        setPull(56);
+        try {
+          await onRefresh();
+        } finally {
+          setBusy(false);
+          setPull(0);
+        }
+      } else setPull(0);
+      pullRef.current = 0;
+    };
+    window.addEventListener("touchstart", down, { passive: true });
+    window.addEventListener("touchmove", move, { passive: true });
+    window.addEventListener("touchend", up);
+    window.addEventListener("touchcancel", up);
+    return () => {
+      root.style.overscrollBehaviorY = before;
+      window.removeEventListener("touchstart", down);
+      window.removeEventListener("touchmove", move);
+      window.removeEventListener("touchend", up);
+      window.removeEventListener("touchcancel", up);
+    };
+  }, [onRefresh, busy]);
+  return { pull, busy };
+}
+
+function PullIndicator({ pull, busy }) {
+  if (!pull && !busy) return null;
+  const ready = pull >= 64;
+  return (
+    <div className="pointer-events-none absolute inset-x-0 top-1 z-10 flex justify-center" style={{ transform: `translateY(${pull - 44}px)`, opacity: Math.min(1, pull / 40) }} aria-hidden>
+      <span className="glass grid size-10 place-items-center rounded-full text-primary">
+        <Icon name={busy ? "loader" : "arrowDown"} className={cx("size-5 transition-transform duration-150", busy && "animate-spin", ready && !busy && "rotate-180")} strokeWidth={2.6} />
+      </span>
+    </div>
+  );
+}
+
 export function Feed() {
+  const { user, live } = useApp();
   const [items, setItems] = useState([]);
   const [cursor, setCursor] = useState(null);
   const [state, setState] = useState({ loading: true, error: null, wards: [] });
   const pinned = useData(() => api("/api/me/saved"), []);
   const sentinel = useRef(null);
+  const [fresh, setFresh] = useState(0);
 
   async function load(reset) {
     setState((s) => ({ ...s, loading: true, error: null }));
@@ -66,6 +273,7 @@ export function Feed() {
       setItems((prev) => (reset ? res.items : [...prev, ...res.items]));
       setCursor(res.next_cursor);
       setState({ loading: false, error: null, wards: res.wards });
+      if (reset) setFresh(0);
     } catch (error) {
       setState((s) => ({ ...s, loading: false, error }));
     }
@@ -74,6 +282,18 @@ export function Feed() {
     load(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // A live "new report in your ward" notification adds to the pill; it never reorders the list under the reader.
+  const seen = useRef(live?.id);
+  useEffect(() => {
+    if (!live || live.id === seen.current) return;
+    seen.current = live.id;
+    if (live.kind === "new_report_in_ward") setFresh((n) => n + 1);
+  }, [live]);
+
+  const refresh = useRef(null);
+  refresh.current = () => load(true);
+  const ptr = usePullToRefresh(useCallbackRef(refresh));
 
   // Load the next page when the end of the list comes into view.
   useEffect(() => {
@@ -89,48 +309,68 @@ export function Feed() {
 
   const [pinDelta, setPinDelta] = useState(0);
   const pinnedCount = pinned.data ? pinned.data.length + pinDelta : null;
+  const names = (user?.addresses || []).filter((a) => state.wards.includes(a.ward_id)).map((a) => a.ward_name_en);
+  const uniqueNames = [...new Set(names)];
 
   return (
     <Shell module="gg">
-      <PinnedBar count={pinnedCount} />
-      {state.error && items.length === 0 && <ErrorState error={state.error} onRetry={() => load(true)} title="Couldn't load the feed" note="Your pinned reports are still saved." />}
-      {!state.error && state.loading && items.length === 0 && (
-        <div className="grid gap-4">
-          <CardSkeleton />
-          <CardSkeleton />
-        </div>
-      )}
-      {!state.loading && !state.error && items.length === 0 && (
-        <StateBlock
-          icon="mapPin"
-          title={state.wards.length ? "No reports in your areas yet" : "Add an area to see reports"}
-          actions={
-            <>
-              <Button onClick={() => navigate("/gg/report")}>Report a problem</Button>
-              <Button kind="outline" onClick={() => navigate("/gg/profile/areas")}>
-                Add an area
-              </Button>
-            </>
-          }
-        >
-          {state.wards.length ? "Reports from the wards you added show up here. Add another area, or report a problem you can see right now." : "Your feed comes from the wards in your profile. Add your home or work ward."}
-        </StateBlock>
-      )}
-      {items.length > 0 && <CardList items={items} setItems={setItems} onPin={(d) => setPinDelta((x) => x + d)} />}
-      {cursor && (
-        <p ref={sentinel} className="py-6 text-center text-sm text-primary">
-          {state.loading ? "Loading more reports…" : ""}
-        </p>
-      )}
-      {state.error && items.length > 0 && (
-        <div className="py-6 text-center">
-          <Button kind="line" onClick={() => load(false)}>
-            Try again
-          </Button>
-        </div>
-      )}
+      <LivePill
+        count={fresh}
+        onShow={() => {
+          window.scrollTo({ top: 0, behavior: "smooth" });
+          load(true);
+        }}
+      />
+      <div className="relative" style={{ transform: ptr.pull ? `translateY(${ptr.pull * 0.6}px)` : undefined, transition: ptr.pull ? "none" : "transform 220ms cubic-bezier(0.2,0,0,1)" }}>
+        <PullIndicator pull={ptr.pull} busy={ptr.busy} />
+        {state.wards.length > 0 && <AreaPulse wards={state.wards} names={uniqueNames} />}
+        {state.wards.length > 0 && <HotspotRail wards={state.wards} />}
+        <PinnedBar count={pinnedCount} />
+        {state.error && items.length === 0 && <ErrorState error={state.error} onRetry={() => load(true)} title="Couldn't load the feed" note="Your pinned reports are still saved." />}
+        {!state.error && state.loading && items.length === 0 && (
+          <div className="grid gap-5">
+            <CardSkeleton />
+            <CardSkeleton />
+          </div>
+        )}
+        {!state.loading && !state.error && items.length === 0 && (
+          <StateBlock
+            icon="mapPin"
+            title={state.wards.length ? "No reports in your areas yet" : "Add an area to see reports"}
+            actions={
+              <>
+                <Button onClick={() => navigate("/gg/report")}>Report a problem</Button>
+                <Button kind="outline" onClick={() => navigate("/gg/profile/areas")}>
+                  Add an area
+                </Button>
+              </>
+            }
+          >
+            {state.wards.length ? "Reports from the wards you added show up here. Add another area, or report a problem you can see right now." : "Your feed comes from the wards in your profile. Add your home or work ward."}
+          </StateBlock>
+        )}
+        {items.length > 0 && <CardList items={items} setItems={setItems} onPin={(d) => setPinDelta((x) => x + d)} />}
+        {cursor && (
+          <p ref={sentinel} className="py-6 text-center text-sm text-primary">
+            {state.loading ? "Loading more reports…" : ""}
+          </p>
+        )}
+        {state.error && items.length > 0 && (
+          <div className="py-6 text-center">
+            <Button kind="line" onClick={() => load(false)}>
+              Try again
+            </Button>
+          </div>
+        )}
+      </div>
     </Shell>
   );
+}
+
+// A stable function that always calls the latest ref'd callback (keeps the pull listener from re-binding).
+function useCallbackRef(ref) {
+  const [fn] = useState(() => (...args) => ref.current?.(...args));
+  return fn;
 }
 
 export function Pinned() {
@@ -138,7 +378,7 @@ export function Pinned() {
   return (
     <Shell module="gg" title="Pinned Reports">
       <div className="mb-4 flex items-center gap-2">
-        <button onClick={() => navigate("/gg/feed")} className="-ml-2 grid size-11 place-items-center rounded-full hover:bg-soft/50" aria-label="Back to the feed">
+        <button onClick={() => navigate("/gg/feed")} className="press -ml-2 grid size-11 place-items-center rounded-full hover:bg-soft/50" aria-label="Back to the feed">
           <Icon name="chevronLeft" className="size-6" strokeWidth={2.4} />
         </button>
         <h1 className="display text-[28px]">Pinned Reports</h1>
@@ -161,7 +401,7 @@ const STEPS = ["Category", "Location", "Photo", "Photo and text", "Review"];
 
 function Chip({ icon, children }) {
   return (
-    <span className="inline-flex min-h-10 items-center gap-2 rounded-full border-[1.5px] border-line bg-white px-3.5 text-[14px] font-bold">
+    <span className="inline-flex min-h-10 items-center gap-2 rounded-full border border-hair bg-surface px-3.5 text-[14px] font-bold shadow-1">
       {icon && <Icon name={icon} className="size-4" />}
       {children}
     </span>
@@ -170,7 +410,7 @@ function Chip({ icon, children }) {
 
 function SectionCard({ title, children, className }) {
   return (
-    <section className={cx("rounded-2xl border border-line/80 bg-white p-4", className)}>
+    <section className={cx("rounded-2xl border border-hair bg-surface p-4 shadow-1", className)}>
       {title && <h2 className="display mb-1.5 text-[17px]">{title}</h2>}
       {children}
     </section>
@@ -245,10 +485,12 @@ export function ReportForm() {
     return (
       <Shell module="gg" title="Report">
         <div className="flex flex-col items-center gap-6 py-14 text-center">
-          <span className="cp-pulse relative grid size-28 place-items-center rounded-full bg-primary text-white">
+          <m.span className="cp-pulse relative grid size-28 place-items-center rounded-full bg-primary text-on-primary shadow-[0_18px_40px_-12px_var(--primary)]" initial={{ scale: 0.4, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={pop}>
             <Icon name="mapPin" className="size-12" />
-          </span>
-          <h1 className="display text-[28px]">Report sent</h1>
+          </m.span>
+          <m.h1 className="wide text-[30px]" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...enter(), delay: 0.15 }}>
+            Report sent
+          </m.h1>
           <p className="max-w-sm text-[17px] leading-relaxed">We are checking it now. People in this ward are told about it, and you get a notification when its status changes.</p>
           <div className="flex w-full max-w-sm flex-col gap-3">
             <Button onClick={() => navigate("/gg/feed")}>Go to the feed</Button>
@@ -282,6 +524,7 @@ export function ReportForm() {
         </div>
       )}
 
+      <m.div key={step} initial={{ opacity: 0, x: 24 }} animate={{ opacity: 1, x: 0 }} transition={enter()}>
       {step === 1 && (
         <div className="mt-5">
           <h2 className="display text-xl">What kind of problem is it?</h2>
@@ -290,13 +533,14 @@ export function ReportForm() {
             {(cats.data || []).map((c) => (
               <button
                 key={c.code}
+                style={catStyle(c.code)}
                 onClick={() => {
                   setCategory(c);
                   setStep(2);
                 }}
-                className={cx("flex min-h-[72px] items-center gap-3 rounded-2xl border-[1.5px] bg-white px-4 text-left", category?.code === c.code ? "border-primary" : "border-line/80 hover:border-primary/60")}
+                className={cx("press flex min-h-[72px] items-center gap-3 rounded-2xl border-[1.5px] bg-surface px-4 text-left shadow-1 transition-colors duration-150", category?.code === c.code ? "border-cat" : "border-hair hover:border-cat/60")}
               >
-                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-soft text-primary">
+                <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-cat text-white shadow-[0_8px_16px_-8px_var(--cat)]">
                   <Icon name={categoryIcon(c.code)} className="size-6" />
                 </span>
                 <span>
@@ -380,7 +624,7 @@ export function ReportForm() {
             <p className="text-[15px] text-ink/85">Take a clear photo of the problem. You can retake it before you post.</p>
             <div className="relative mt-3 aspect-[4/3] overflow-hidden rounded-xl bg-soft">
               <img src={shot.url} alt="Captured photo" className="size-full object-cover" />
-              <span className="num absolute bottom-3 left-3 rounded-full bg-ink/90 px-3 py-1 text-[13px] font-bold text-white">Taken {fmtTime(shot.taken_at)}</span>
+              <span className="num absolute bottom-3 left-3 rounded-full bg-black/70 px-3 py-1 text-[13px] font-bold text-white">Taken {fmtTime(shot.taken_at)}</span>
             </div>
             <Button
               type="button"
@@ -468,6 +712,7 @@ export function ReportForm() {
           </div>
         </div>
       )}
+      </m.div>
     </Shell>
   );
 }

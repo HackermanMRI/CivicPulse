@@ -114,6 +114,12 @@ def votes_view(c: Counter | None) -> dict:
             "by_mode": {m: {d: c[f"{d}:{m}"] for d in DECISIONS} for m in MODES}}
 
 
+def _avatar_url(user: User) -> str | None:
+    from app.routers.users import avatar_url   # local import: routers import this module
+
+    return avatar_url(user)
+
+
 def reporter_view(user: User | None) -> dict | None:
     """Name only (UI decision: the card shows who posted before the vote). Reputation stays behind the vote."""
     if user is None or user.state == "deleted" or not user.display_name:
@@ -148,8 +154,11 @@ def report_card(ctx: ViewContext, r: Report) -> dict:
         out["results"] = {
             **scores_view(r), "votes": votes_view(ctx.vote_counts.get(r.id)),
             "resolved": r.event_id in ctx.resolved, "comments_count": ctx.comment_counts.get(r.id, 0),
+            # After the vote only (UI v2): the reporter's id (for their public profile) and their profile photo.
             "reporter": {"display_name": reporter.display_name if reporter and reporter.state != "deleted" else None,
-                         "reputation_display": to_display(rep.rep) if rep else None},
+                         "reputation_display": to_display(rep.rep) if rep else None,
+                         "id": str(reporter.id) if reporter and reporter.state != "deleted" and reporter.role == "citizen" else None,
+                         "avatar_url": _avatar_url(reporter) if reporter else None},
         }
     return out
 

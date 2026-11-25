@@ -101,3 +101,53 @@ def abs_path(relpath: str) -> Path:
 
 def hamming(a: str, b: str) -> int:
     return sum(1 for x, y in zip(a, b) if x != y)
+
+
+# ---------- profile photos (UI v2) ----------
+# Same safety rules as report photos (real-content check, pixel limit, Pillow re-encode that drops EXIF and its GPS
+# position), then a centre square crop. Unlike report evidence, a profile photo may come from the gallery: it is
+# never evidence and never scored. Stored under avatars/ with a random name; served only through the API.
+
+def process_avatar(data: bytes) -> bytes:
+    prof = get_params().profile
+    if len(data) > prof.avatar_max_bytes:
+        raise HTTPException(status_code=413, detail=f"Photo is too big. The limit is {prof.avatar_max_bytes // (1024 * 1024)} MB.")
+    if sniff(data[:16]) is None:
+        raise HTTPException(status_code=415, detail="Choose a JPEG, PNG or WebP photo.")
+    up = get_params().uploads
+    Image.MAX_IMAGE_PIXELS = up.max_pixels
+    try:
+        with Image.open(io.BytesIO(data)) as probe:
+            w, h = probe.size
+            if w * h > up.max_pixels:
+                raise HTTPException(status_code=413, detail="Photo has too many pixels.")
+            probe.verify()
+        with Image.open(io.BytesIO(data)) as im:
+            im = ImageOps.exif_transpose(im).convert("RGB")
+            side = prof.avatar_side_px
+            im = ImageOps.fit(im, (side, side), method=Image.Resampling.LANCZOS, centering=(0.5, 0.5))
+            out = io.BytesIO()
+            im.save(out, format="JPEG", quality=86, optimize=True)   # no EXIF is written
+            return out.getvalue()
+    except HTTPException:
+        raise
+    except (Image.DecompressionBombError, Image.UnidentifiedImageError, OSError, SyntaxError, ValueError):
+        raise HTTPException(status_code=415, detail="This photo could not be read. Try another one.")
+
+
+def store_avatar(jpeg: bytes) -> str:
+    rel = Path("avatars") / f"{uuid.uuid4().hex}.jpg"
+    full = Path(settings.UPLOAD_DIR) / rel
+    full.parent.mkdir(parents=True, exist_ok=True)
+    full.write_bytes(jpeg)
+    return str(rel)
+
+
+def remove_file(relpath: str | None) -> None:
+    """Best effort: a missing file is fine (the row no longer points at it)."""
+    if not relpath:
+        return
+    try:
+        abs_path(relpath).unlink(missing_ok=True)
+    except HTTPException:
+        pass

@@ -189,6 +189,16 @@ class UploadsCfg(_Strict):
     phash_threshold: int = Field(default=6, ge=0, le=32)
 
 
+class ProfileCfg(_Strict):
+    """Public profile (UI v2). Defaults live here so config/civicpulse.yaml (and its hash) need not change."""
+    name_change_days: int = Field(default=30, ge=0)       # a display name can change once per this many days
+    avatar_side_px: int = Field(default=512, ge=64, le=2048)
+    # The app shrinks every photo on the phone first (768 px JPEG), so people never meet a size limit. This cap only
+    # protects the server from oversized direct API uploads; the pixel limit (uploads.max_pixels) still applies.
+    avatar_max_bytes: int = Field(default=25 * 1024 * 1024, gt=0)
+    max_interests: int = Field(default=10, ge=1, le=20)
+
+
 class Category(_Strict):
     code: str = Field(pattern=r"^[a-z_]+$")
     name_en: str
@@ -232,6 +242,7 @@ class Params(_Strict):
     sessions: SessionsCfg
     otp: OtpCfg
     uploads: UploadsCfg
+    profile: ProfileCfg = Field(default_factory=ProfileCfg)
     categories: list[Category] = Field(min_length=2)
     clip_unrelated_prompt: str
     ml: MlCfg

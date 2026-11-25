@@ -18,19 +18,26 @@ async function tilesAvailable() {
   }
 }
 
+// Base map palettes. Dark mode gets a night map in the Green Guard family, so the dashboard never flashes white.
+const PALETTE = {
+  light: { bg: "#eef5f5", earth: "#f3f8f8", landuse: "#e4efe9", water: "#cfe3ea", buildings: "#e3ecec", highway: "#cfe0e0", major: "#dbe8e8", minor: "#ffffff", label: "#1c3d3d", halo: "#ffffff", roadLabel: "#4a6b6b" },
+  dark: { bg: "#161c23", earth: "#1a2129", landuse: "#1c2826", water: "#1a2a37", buildings: "#222b34", highway: "#3b4856", major: "#323e4a", minor: "#2a343f", label: "#d5dde3", halo: "#151b22", roadLabel: "#a0adb8" },
+};
+
 function baseStyle(withTiles) {
-  const layers = [{ id: "bg", type: "background", paint: { "background-color": "#eef5f5" } }];
+  const c = PALETTE[document.documentElement.dataset.theme === "dark" ? "dark" : "light"];
+  const layers = [{ id: "bg", type: "background", paint: { "background-color": c.bg } }];
   const sources = {};
   if (withTiles) {
     sources.protomaps = { type: "vector", url: "pmtiles:///tiles/pilot.pmtiles", attribution: "© OpenStreetMap contributors" };
     layers.push(
-      { id: "earth", type: "fill", source: "protomaps", "source-layer": "earth", paint: { "fill-color": "#f3f8f8" } },
-      { id: "landuse", type: "fill", source: "protomaps", "source-layer": "landuse", paint: { "fill-color": "#e4efe9", "fill-opacity": 0.7 } },
-      { id: "water", type: "fill", source: "protomaps", "source-layer": "water", paint: { "fill-color": "#cfe3ea" } },
-      { id: "buildings", type: "fill", source: "protomaps", "source-layer": "buildings", minzoom: 14, paint: { "fill-color": "#e3ecec" } },
+      { id: "earth", type: "fill", source: "protomaps", "source-layer": "earth", paint: { "fill-color": c.earth } },
+      { id: "landuse", type: "fill", source: "protomaps", "source-layer": "landuse", paint: { "fill-color": c.landuse, "fill-opacity": 0.7 } },
+      { id: "water", type: "fill", source: "protomaps", "source-layer": "water", paint: { "fill-color": c.water } },
+      { id: "buildings", type: "fill", source: "protomaps", "source-layer": "buildings", minzoom: 14, paint: { "fill-color": c.buildings } },
       {
         id: "roads", type: "line", source: "protomaps", "source-layer": "roads",
-        paint: { "line-color": ["match", ["get", "kind"], "highway", "#cfe0e0", "major_road", "#dbe8e8", "#ffffff"], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 2.5, 17, 8] },
+        paint: { "line-color": ["match", ["get", "kind"], "highway", c.highway, "major_road", c.major, c.minor], "line-width": ["interpolate", ["linear"], ["zoom"], 10, 0.6, 14, 2.5, 17, 8] },
       },
       {
         id: "place-labels", type: "symbol", source: "protomaps", "source-layer": "places",
@@ -41,7 +48,7 @@ function baseStyle(withTiles) {
           "text-size": ["interpolate", ["linear"], ["zoom"], 10, 11, 15, 15],
           "text-max-width": 8,
         },
-        paint: { "text-color": "#1c3d3d", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+        paint: { "text-color": c.label, "text-halo-color": c.halo, "text-halo-width": 1.5 },
       },
             {
         id: "road-labels", type: "symbol", source: "protomaps", "source-layer": "roads", minzoom: 13,
@@ -52,7 +59,7 @@ function baseStyle(withTiles) {
           "text-font": ["Noto Sans Regular"],
           "text-size": ["interpolate", ["linear"], ["zoom"], 13, 10, 17, 13],
         },
-        paint: { "text-color": "#4a6b6b", "text-halo-color": "#ffffff", "text-halo-width": 1.5 },
+        paint: { "text-color": c.roadLabel, "text-halo-color": c.halo, "text-halo-width": 1.5 },
       },
     );
   }
@@ -282,13 +289,13 @@ const MapView = forwardRef(function MapView({ points, grid, hotspots, mode, laye
     <div className="relative size-full">
       <div ref={box} className="size-full" role="region" aria-label="Map of reports" />
       {tip && mode === "3d" && (
-        <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[120%] rounded-xl bg-ink px-4 py-3 text-white shadow-3" style={{ left: tip.x, top: tip.y }}>
+        <div className="pointer-events-none absolute z-10 -translate-x-1/2 -translate-y-[120%] rounded-xl bg-inverse px-4 py-3 text-on-inverse shadow-3" style={{ left: tip.x, top: tip.y }}>
           <p className="num text-[17px] font-extrabold">{tip.count} credible reports</p>
-          <p className="text-sm text-white/85">{gridLabel || "One 250 m square"}</p>
+          <p className="text-sm text-on-inverse/85">{gridLabel || "One 250 m square"}</p>
         </div>
       )}
-      {tiles === false && <p className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-white/95 px-3 py-1 text-xs font-semibold shadow-1">Base map not installed (docs/MAPS.md)</p>}
-      <p className="absolute bottom-3 right-3 rounded-md bg-white/90 px-2 py-0.5 text-[11px] text-primary">© OpenStreetMap contributors</p>
+      {tiles === false && <p className="absolute left-1/2 top-3 -translate-x-1/2 rounded-full bg-surface/95 px-3 py-1 text-xs font-semibold shadow-1">Base map not installed (docs/MAPS.md)</p>}
+      <p className="absolute bottom-3 right-3 rounded-md bg-surface/90 px-2 py-0.5 text-[11px] text-primary">© OpenStreetMap contributors</p>
     </div>
   );
 });

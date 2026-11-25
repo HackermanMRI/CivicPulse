@@ -1,16 +1,34 @@
 // Routes. Sign-in pages are open; everything else needs a session. Map and admin code load lazily (B14).
-import { Suspense, lazy } from "react";
-import { Alerts, EditAreas, MyReports, Profile } from "./pages/Account.jsx";
-import { Forgot, Login, ModulePicker, Signup } from "./pages/auth/Auth.jsx";
+// UI v2: Price Patrol, account pages and the sign-in pages are their own chunks too, so the feed's first load stays
+// inside the B14 budget (≤ 180 KB gz). They are fetched quietly once the browser is idle, so a tap still opens
+// them at once.
+import { Suspense, lazy, useEffect } from "react";
 import { Feed, Pinned, ReportForm } from "./pages/GreenGuard.jsx";
-import { Explore, PriceDashboard, PriceReport } from "./pages/prices/Prices.jsx";
 import { Logo } from "./components/icons.jsx";
 import { Skeleton } from "./components/ui.jsx";
 import { Redirect, useRoute } from "./lib/router.jsx";
 import { useApp } from "./lib/store.jsx";
 
+const loadAccount = () => import("./pages/Account.jsx");
+const loadAuth = () => import("./pages/auth/Auth.jsx");
+const loadPrices = () => import("./pages/prices/Prices.jsx");
+const named = (loader, name) => lazy(() => loader().then((mod) => ({ default: mod[name] })));
+
 const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
 const Admin = lazy(() => import("./pages/admin/Admin.jsx"));
+const Alerts = named(loadAccount, "Alerts");
+const EditAreas = named(loadAccount, "EditAreas");
+const MyReports = named(loadAccount, "MyReports");
+const Profile = named(loadAccount, "Profile");
+const Login = named(loadAuth, "Login");
+const Signup = named(loadAuth, "Signup");
+const Forgot = named(loadAuth, "Forgot");
+const ModulePicker = named(loadAuth, "ModulePicker");
+const PriceDashboard = named(loadPrices, "PriceDashboard");
+const Explore = named(loadPrices, "Explore");
+const PriceReport = named(loadPrices, "PriceReport");
+const PersonPage = lazy(() => import("./pages/People.jsx").then((mod) => ({ default: mod.PersonPage })));
+const PERSON = /^\/(gg|pp)\/people\/[0-9a-f-]{36}$/;
 
 const OPEN = { "/login": Login, "/signup": Signup, "/forgot": Forgot };
 
@@ -24,6 +42,28 @@ function Splash() {
   );
 }
 
+// While a page's code arrives (first visit on a slow network): the page background and a few skeleton blocks.
+function PageFallback() {
+  return (
+    <div className="mx-auto max-w-2xl space-y-4 px-4 pt-24" aria-busy="true">
+      <Skeleton className="h-9 w-1/2" />
+      <Skeleton className="h-40 w-full rounded-3xl" />
+      <Skeleton className="h-64 w-full rounded-3xl" />
+    </div>
+  );
+}
+
+function usePrefetch(user) {
+  useEffect(() => {
+    const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
+    const id = idle(() => {
+      const loaders = user ? [loadAccount, loadPrices] : [loadAuth];
+      loaders.forEach((l) => l().catch(() => {}));
+    });
+    return () => (window.cancelIdleCallback || clearTimeout)(id);
+  }, [user]);
+}
+
 function home(user) {
   if (user.role === "admin") return "/admin";
   if (!user.preferred_module) return "/modules";
@@ -33,11 +73,16 @@ function home(user) {
 export default function App() {
   const { path } = useRoute();
   const { user, booting } = useApp();
+  usePrefetch(user);
   if (booting) return <Splash />;
   if (OPEN[path]) {
     if (user) return <Redirect to={home(user)} />;
     const Page = OPEN[path];
-    return <Page key={path} />; // a fresh page per URL, so /gg/alerts and /pp/alerts never share state
+    return (
+      <Suspense fallback={<Splash />}>
+        <Page key={path} />
+      </Suspense>
+    );
   }
   if (!user) return <Redirect to="/login" />;
   if (path.startsWith("/admin"))
@@ -72,7 +117,11 @@ export default function App() {
         <Dashboard />
       </Suspense>
     );
-  const Page = routes[path];
+  const Page = routes[path] || (PERSON.test(path) ? PersonPage : null);
   if (!Page) return <Redirect to={home(user)} />;
-  return <Page key={path} />; // a fresh page per URL, so /gg/alerts and /pp/alerts never share state
+  return (
+    <Suspense fallback={<PageFallback />}>
+      <Page key={path} />
+    </Suspense>
+  );
 }
