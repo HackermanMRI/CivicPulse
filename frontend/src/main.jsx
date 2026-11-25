@@ -6,21 +6,32 @@ import App from "./App.jsx";
 import "./index.css";
 import { RouterProvider } from "./lib/router.jsx";
 import { AppProvider } from "./lib/store.jsx";
+import { AppearanceProvider, initialAppearance, useAppearance } from "./lib/theme.jsx";
+
+// Theme, glass and motion attributes go on <html> before the first render, so there is no light flash in dark mode.
+initialAppearance();
+
+// B5: LazyMotion + domMax (strict: only the light `m` components). reducedMotion="user" follows the system
+// setting (transforms are dropped, short fades stay); the in-app "Reduce motion" switch forces the same.
+function Motion({ children }) {
+  const { resolved } = useAppearance();
+  return <MotionConfig reducedMotion={resolved.reduceMotion ? "always" : "user"}>{children}</MotionConfig>;
+}
 
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {/* B5: LazyMotion + domMax (strict: only the light `m` components). reducedMotion="user" follows the
-        system setting: transforms are dropped, short fades stay. */}
-    <LazyMotion features={domMax} strict>
-      <MotionConfig reducedMotion="user">
-        <TooltipProvider delayDuration={300}>
-          <RouterProvider>
-            <AppProvider>
-              <App />
-            </AppProvider>
-          </RouterProvider>
-        </TooltipProvider>
-      </MotionConfig>
-    </LazyMotion>
+    <AppearanceProvider>
+      <LazyMotion features={domMax} strict>
+        <Motion>
+          <TooltipProvider delayDuration={300}>
+            <RouterProvider>
+              <AppProvider>
+                <App />
+              </AppProvider>
+            </RouterProvider>
+          </TooltipProvider>
+        </Motion>
+      </LazyMotion>
+    </AppearanceProvider>
   </StrictMode>,
 );

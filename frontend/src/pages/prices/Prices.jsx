@@ -1,5 +1,6 @@
 // Price Patrol (boards: Price Patrol dashboard, Report a price; W6, C6, C19, P-2): today's verified prices, history
 // and market comparison for one product, price alerts, your submissions, Explore Prices and the report form.
+import { m } from "motion/react";
 import { useEffect, useMemo, useState } from "react";
 import { Camera, ensureFreshToken } from "../../components/Camera.jsx";
 import { PriceChart } from "../../components/charts.jsx";
@@ -11,6 +12,7 @@ import { dhakaToday, fmtLongStamp, fmtRelDay, fmtShort, fmtTime } from "../../li
 import { getPosition } from "../../lib/geo.js";
 import { Link, navigate, useRoute } from "../../lib/router.jsx";
 import { useApp, useData } from "../../lib/store.jsx";
+import { pop, spring, stagger, tap } from "../../lib/motion.js";
 
 const taka = (v) => (v == null ? "—" : `৳${Number(v).toLocaleString("en-US", { maximumFractionDigits: 2 })}`);
 
@@ -28,8 +30,11 @@ function Change({ change, withDates = true, className }) {
   const up = p > 0;
   return (
     <span className={cx("num text-[15px]", className)}>
-      <b className={up ? "text-err" : "text-ok"}>
-        {up ? "▲" : "▼"} {Math.abs(p).toFixed(1)}%
+      <b className={cx("inline-flex items-center gap-1 rounded-full px-2 py-0.5", up ? "bg-err-soft text-err" : "bg-ok-soft text-ok")}>
+        <m.span className="inline-block" initial={{ y: up ? 6 : -6, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ ...pop, delay: 0.25 }}>
+          {up ? "▲" : "▼"}
+        </m.span>
+        {Math.abs(p).toFixed(1)}%
       </b>
       {dates}
     </span>
@@ -40,18 +45,27 @@ function variantLine(c, market) {
   return [c.variant, `per ${c.unit}`, market].filter(Boolean).join(" · ");
 }
 
-function PriceCard({ card, selected, onSelect }) {
+function PriceCard({ card, selected, onSelect, index = 0 }) {
   const verified = card.today.status === "Verified" || Boolean(card.latest);
   const insufficient = !card.latest;
   return (
-    <button
+    <m.button
       onClick={onSelect}
       aria-pressed={selected}
+      initial={{ opacity: 0, y: 14 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={stagger(index)}
+      whileTap={tap}
       className={cx(
-        "flex min-h-[200px] w-[230px] shrink-0 flex-col rounded-2xl border-[1.5px] bg-white p-4 text-left transition-colors duration-150 lg:w-auto",
-        insufficient ? "border-dashed border-line" : selected ? "border-primary" : "border-line/80 hover:border-primary/60",
+        "relative flex min-h-[200px] w-[230px] shrink-0 snap-start flex-col overflow-hidden rounded-3xl border-[1.5px] bg-surface p-4 text-left transition-[border-color,box-shadow] duration-200 lg:w-auto",
+        insufficient
+          ? "border-dashed border-line"
+          : selected
+            ? "border-primary shadow-[0_16px_32px_-16px_var(--primary)]"
+            : "border-hair shadow-1 hover:border-primary/60",
       )}
     >
+      {selected && !insufficient && <m.span layoutId="price-sel" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-primary to-glow" transition={spring} aria-hidden />}
       <span className="flex items-start justify-between gap-2">
         <span className="display text-[17px]">{card.commodity.name_en}</span>
         {verified && !insufficient ? (
@@ -81,13 +95,13 @@ function PriceCard({ card, selected, onSelect }) {
           </span>
         </>
       )}
-    </button>
+    </m.button>
   );
 }
 
 function PanelCard({ title, sub, action, children, className }) {
   return (
-    <section className={cx("min-w-0 rounded-2xl border border-line/80 bg-white p-5", className)}>
+    <section className={cx("min-w-0 rounded-3xl border border-hair bg-surface p-5 shadow-1", className)}>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2>
           <span className="display text-lg">{title}</span>
@@ -194,7 +208,7 @@ function WatchDialog({ open, onClose }) {
       ) : (
         <div className="mt-4 flex flex-wrap gap-2">
           {data.data[0].map((c) => (
-            <button key={c.id} onClick={() => toggle(c.id)} aria-pressed={watched.has(c.id)} className={cx("min-h-11 rounded-full border-[1.5px] px-4 text-[15px] font-bold", watched.has(c.id) ? "border-primary bg-primary text-white" : "border-line bg-white")}>
+            <button key={c.id} onClick={() => toggle(c.id)} aria-pressed={watched.has(c.id)} className={cx("min-h-11 rounded-full border-[1.5px] px-4 text-[15px] font-bold", watched.has(c.id) ? "border-primary bg-primary text-on-primary" : "border-line bg-surface")}>
               {watched.has(c.id) && <Icon name="check" className="-ml-1 mr-1 inline size-4" strokeWidth={3} />}
               {c.name_en} · {c.variant}
             </button>
@@ -271,7 +285,7 @@ export function PriceDashboard() {
       {cards.length > 0 && (
         <div className="-mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible lg:px-0">
           {cards.map((c) => (
-            <PriceCard key={c.commodity.id} card={c} selected={selected?.commodity.id === c.commodity.id} onSelect={() => setSel(c.commodity.id)} />
+            <PriceCard key={c.commodity.id} index={cards.indexOf(c)} card={c} selected={selected?.commodity.id === c.commodity.id} onSelect={() => setSel(c.commodity.id)} />
           ))}
         </div>
       )}
@@ -447,14 +461,14 @@ function PhotoTile({ icon, title, sub, shot, onTake, onClear }) {
     return (
       <div className="relative overflow-hidden rounded-2xl border border-line">
         <img src={shot.url} alt={title} className="aspect-[4/3] w-full object-cover" />
-        <button type="button" onClick={onClear} className="absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-white/95 shadow-1" aria-label={`Remove ${title.toLowerCase()}`}>
+        <button type="button" onClick={onClear} className="absolute right-2 top-2 grid size-10 place-items-center rounded-full bg-surface/95 shadow-1" aria-label={`Remove ${title.toLowerCase()}`}>
           <Icon name="x" className="size-5" />
         </button>
-        <span className="absolute bottom-2 left-2 rounded-full bg-ink/85 px-2.5 py-0.5 text-[13px] font-bold text-white">{title}</span>
+        <span className="absolute bottom-2 left-2 rounded-full bg-black/70 px-2.5 py-0.5 text-[13px] font-bold text-white">{title}</span>
       </div>
     );
   return (
-    <button type="button" onClick={onTake} className="flex min-h-[112px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-dashed border-line bg-white px-3 text-center hover:bg-soft/20">
+    <button type="button" onClick={onTake} className="flex min-h-[112px] flex-col items-center justify-center gap-1 rounded-2xl border-[1.5px] border-dashed border-line bg-surface px-3 text-center hover:bg-soft/20">
       <Icon name={icon} className="size-6" />
       <span className="font-bold">{title}</span>
       <span className="text-[13px] text-ink/75">{sub}</span>
@@ -519,7 +533,7 @@ export function PriceReport() {
     return (
       <Shell module="pp" title="Report a price">
         <div className="flex flex-col items-center gap-6 py-14 text-center">
-          <span className="cp-pulse relative grid size-28 place-items-center rounded-full bg-primary text-white">
+          <span className="cp-pulse relative grid size-28 place-items-center rounded-full bg-primary text-on-primary">
             <Icon name="tag" className="size-12" />
           </span>
           <h1 className="display text-[28px]">Price posted</h1>
@@ -589,7 +603,7 @@ export function PriceReport() {
             <p className="text-[15px] font-bold">Variant</p>
             <div className="mt-2 flex flex-wrap gap-2" role="radiogroup" aria-label="Variant">
               {variants.map((v) => (
-                <button key={v.id} type="button" role="radio" aria-checked={String(v.id) === String(com)} onClick={() => setCom(String(v.id))} className={cx("min-h-12 rounded-full border-[1.5px] px-5 text-base font-bold capitalize", String(v.id) === String(com) ? "border-primary bg-primary text-white" : "border-ink/70 bg-white")}>
+                <button key={v.id} type="button" role="radio" aria-checked={String(v.id) === String(com)} onClick={() => setCom(String(v.id))} className={cx("min-h-12 rounded-full border-[1.5px] px-5 text-base font-bold capitalize", String(v.id) === String(com) ? "border-primary bg-primary text-on-primary" : "border-ink/70 bg-surface")}>
                   {v.variant}
                 </button>
               ))}
@@ -610,7 +624,7 @@ export function PriceReport() {
         </Field>
         {markets.data && visibleMarkets.length === 0 && <p className="text-sm text-warn-ink">No markets are open for your account yet.</p>}
         <Field label="Price" id="price">
-          <div className="flex min-h-[64px] items-center gap-3 rounded-xl border-2 border-ink bg-white px-4 focus-within:ring-2 focus-within:ring-ink/30">
+          <div className="flex min-h-[64px] items-center gap-3 rounded-xl border-2 border-ink bg-surface px-4 focus-within:ring-2 focus-within:ring-ink/30">
             <span className="num text-[28px] font-extrabold">৳</span>
             <input id="price" className="num min-w-0 flex-1 bg-transparent text-[30px] font-extrabold focus:outline-none" inputMode="decimal" pattern="\d+(\.\d{1,2})?" placeholder="0" required value={price} onChange={(e) => setPrice(e.target.value.replace(/[^\d.]/g, ""))} />
             <span className="shrink-0 text-[15px] font-bold text-ink/80">{chosen ? `per ${chosen.unit}` : ""}</span>

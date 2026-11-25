@@ -29,7 +29,7 @@ export function MapControls({ mode, api: ctl }) {
           ["move", "Show all reports", () => ctl.current?.fitAll()],
         ];
   return (
-    <div className="absolute right-4 top-4 z-10 flex flex-col overflow-hidden rounded-xl border border-line/80 bg-white shadow-1">
+    <div className="absolute right-4 top-4 z-10 flex flex-col overflow-hidden rounded-xl border border-line/80 bg-surface shadow-1">
       {items.map(([icon, label, fn]) => (
         <Tip key={label} label={label}>
           <button className={btn} onClick={fn} aria-label={label}>

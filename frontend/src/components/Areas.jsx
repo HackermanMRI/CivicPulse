@@ -12,7 +12,7 @@ export const kindLabel = (k) => (KINDS.find(([v]) => v === k) || [k, k])[1];
 
 export function AreaCard({ kind, name, onRemove, removable = true }) {
   return (
-    <div className="flex min-h-[68px] items-center gap-3 rounded-2xl border border-line bg-white px-4">
+    <div className="flex min-h-[68px] items-center gap-3 rounded-2xl border border-line bg-surface px-4">
       <span className="rounded-full bg-soft px-3 py-1 text-[13px] font-bold">{kindLabel(kind)}</span>
       <span className="min-w-0 flex-1 truncate text-[17px] font-semibold">{name}</span>
       {removable && (
@@ -45,7 +45,7 @@ export function AreaEditor({ areas, wards, onAdd, onRemove, busy }) {
               role="radio"
               aria-checked={kind === v}
               onClick={() => setKind(v)}
-              className={cx("min-h-12 rounded-full border-[1.5px] px-5 text-base font-bold", kind === v ? "border-primary bg-primary text-white" : "border-ink/70 bg-white text-ink")}
+              className={cx("min-h-12 rounded-full border-[1.5px] px-5 text-base font-bold", kind === v ? "border-primary bg-primary text-on-primary" : "border-ink/70 bg-surface text-ink")}
             >
               {label}
             </button>

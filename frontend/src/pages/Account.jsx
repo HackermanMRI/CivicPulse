@@ -1,15 +1,19 @@
 // Alerts (two tabs, B10, C4) and the profile: reputation, my reports, areas and account
 // (boards: Alerts and notifications, Profile).
-import { useEffect, useState } from "react";
+import { m } from "motion/react";
+import { useCallback, useEffect, useState } from "react";
 import { AreaEditor, kindLabel } from "../components/Areas.jsx";
 import { Icon, categoryIcon } from "../components/icons.jsx";
 import { ReportDialog } from "../components/Report.jsx";
+import { Badges, Completeness, EditProfile, PhotoEditor, ProfileHeader, StatTiles } from "./People.jsx";
 import { Shell } from "../components/Shell.jsx";
-import { Button, DemoBadge, Dialog, ErrorState, ScoreBar, Skeleton, StateBlock, StatusChip, Tabs, cx } from "../components/ui.jsx";
+import { Button, DemoBadge, Dialog, ErrorState, Segmented, Skeleton, StateBlock, StatusChip, Switch, Tabs, cx } from "../components/ui.jsx";
 import { api } from "../lib/api.js";
 import { ago, bdt, fmtDate, fmtRelDay, fmtTime, initials } from "../lib/format.js";
 import { Link, MODULE_KEY, moduleFromPath, navigate, useRoute } from "../lib/router.jsx";
 import { useApp, useData } from "../lib/store.jsx";
+import { enter, pop, stagger } from "../lib/motion.js";
+import { useAppearance } from "../lib/theme.jsx";
 
 // The module comes from the URL (/gg/… or /pp/…), never from the preferred module, so Alerts and Profile stay in
 // the area the person opened them from.
@@ -65,9 +69,9 @@ function alertLook(n) {
 function AlertItem({ n, onOpen }) {
   const look = alertLook(n);
   return (
-    <li>
-      <button onClick={() => onOpen(n)} className={cx("flex w-full items-start gap-3.5 rounded-2xl border bg-white p-4 text-left hover:bg-soft/20", n.read ? "border-line/60" : "border-line")}>
-        <span className={cx("grid size-12 shrink-0 place-items-center rounded-xl", n.read ? "border border-line/70 bg-white text-ink" : look.tile)}>
+    <m.li initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={enter()}>
+      <button onClick={() => onOpen(n)} className={cx("press flex w-full items-start gap-3.5 rounded-2xl border bg-surface p-4 text-left shadow-1 hover:bg-soft/20", n.read ? "border-hair" : "border-line")}>
+        <span className={cx("grid size-12 shrink-0 place-items-center rounded-xl", n.read ? "border border-line/70 bg-surface text-ink" : look.tile)}>
           <Icon name={look.icon} className="size-6" />
         </span>
         <span className="min-w-0 flex-1">
@@ -75,9 +79,9 @@ function AlertItem({ n, onOpen }) {
           <span className="block text-[16px] leading-relaxed">{look.text}</span>
           <span className="mt-1 block text-[13px] text-primary">{n.read ? fmtRelDay(n.created_at) : ago(n.created_at)}</span>
         </span>
-        {!n.read && <span className="mt-2 size-3 shrink-0 rounded-full bg-st-high" aria-label="Unread" />}
+        {!n.read && <span className="mt-2 size-3 shrink-0 rounded-full bg-st-high shadow-[0_0_0_4px_rgb(42_111_214/0.18)]" aria-label="Unread" />}
       </button>
-    </li>
+    </m.li>
   );
 }
 
@@ -255,21 +259,60 @@ function Permissions({ open, onClose, consents }) {
   );
 }
 
+// Appearance (UI v2): saved on this phone only. "Reduce transparency" exists because Safari has no system setting
+// the web can read for it; "Reduce motion" mirrors the phone's own setting for people who want it only here.
+function Appearance() {
+  const { prefs, set } = useAppearance();
+  return (
+    <section className="mt-7">
+      <SectionHead title="Appearance" />
+      <div className="mt-3 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-hair bg-surface px-4 py-3 shadow-1">
+          <span>
+            <span className="block font-bold">Theme</span>
+            <span className="block text-sm text-muted">System follows your phone's light or dark mode</span>
+          </span>
+          <Segmented
+            label="Theme"
+            value={prefs.theme}
+            onChange={(theme) => set({ theme })}
+            options={[
+              { value: "system", label: "System" },
+              { value: "light", label: "Light" },
+              { value: "dark", label: "Dark" },
+            ]}
+          />
+        </div>
+        <Switch id="glass" checked={prefs.glass === "off"} onChange={(on) => set({ glass: on ? "off" : "on" })} label="Reduce transparency" sub="Solid bars instead of see-through glass. Easier to read." />
+        <Switch id="motion" checked={prefs.motion === "reduce"} onChange={(on) => set({ motion: on ? "reduce" : "system" })} label="Reduce motion" sub="Simple fades instead of moving and bouncing." />
+      </div>
+    </section>
+  );
+}
+
 export function Profile() {
-  const { signOut, toast } = useApp();
+  const { signOut, toast, loadMe } = useApp();
   const { module, base } = useModuleRoute();
   const [me, setMe] = useState(null);
   const [error, setError] = useState(null);
   const [open, setOpen] = useState(null);
-  const [dialog, setDialog] = useState(null);
+  const [dialog, setDialog] = useState(null); // rep | perm | lang | edit | photo
+  const [tab, setTab] = useState("overview");
   const type = module === "pp" ? "price" : "civic";
   const mine = useData(() => api("/api/me/reports", { query: { type, limit: 3 } }), [type]);
+  const cats = useData(() => api("/api/categories"), []);
+  const load = useCallback(() => api("/api/me").then(setMe).catch(setError), []);
   useEffect(() => {
-    api("/api/me").then(setMe).catch(setError);
-  }, []);
+    load();
+  }, [load]);
+  // After an edit: this page, and the session user (the avatar in the nav bars) both refresh.
+  const refresh = () => {
+    load();
+    loadMe().catch(() => {});
+  };
 
   async function remove() {
-    if (!window.confirm("Delete your account? Your name is removed. Your reports stay, shown as “reporter unavailable”. This cannot be undone.")) return;
+    if (!window.confirm("Delete your account? Your name, photo and profile details are removed. Your reports stay, shown as “reporter unavailable”. This cannot be undone.")) return;
     try {
       await api("/api/me", { method: "DELETE" });
       await signOut();
@@ -284,116 +327,116 @@ export function Profile() {
       {error && <ErrorState error={error} title="Couldn't load your profile" />}
       {!me && !error && (
         <div className="space-y-4">
-          <Skeleton className="h-16 w-2/3" />
+          <Skeleton className="h-36 w-full rounded-[28px]" />
+          <Skeleton className="h-8 w-2/3" />
           <Skeleton className="h-32 w-full" />
-          <Skeleton className="h-48 w-full" />
         </div>
       )}
       {me && (
-        <div>
-          <section className="flex items-center gap-4 pb-5">
-            <span className="grid size-16 shrink-0 place-items-center rounded-full bg-primary text-xl font-extrabold text-white">{initials(me.display_name)}</span>
-            <div className="min-w-0">
-              <h1 className="display truncate text-2xl">{me.display_name}</h1>
-              <p className="num text-sm text-primary">
-                {me.phone_masked} · Member since {monthYear.format(new Date(me.member_since))}
-              </p>
-            </div>
-          </section>
-          <section className="border-t-2 border-ink pt-4">
-            <div className="flex items-end justify-between gap-4">
-              <div>
-                <p className="text-[15px] font-bold text-primary">Your reputation</p>
-                <p className="num text-[52px] font-extrabold leading-[1.05] text-st-high">{me.reputation.display}</p>
-              </div>
-              <div className="pb-1 text-right">
-                <p className="text-sm text-primary">Uncertainty</p>
-                <p className="num text-2xl font-extrabold">{me.reputation.uncertainty_display}</p>
-              </div>
-            </div>
-            <ScoreBar value={me.reputation.display} color="bg-st-high" className="mt-3 h-2.5" />
-            <p className="mt-3 text-[16px] leading-relaxed">It goes up when your reports end up credible and when your on-the-spot votes match the final result. Older results count less: their weight halves every 90 days.</p>
-            <button onClick={() => setDialog("rep")} className="mt-2 min-h-11 font-bold underline underline-offset-4">
-              How reputation works
-            </button>
-          </section>
-          <section className="mt-3 grid grid-cols-3 border-y border-line">
-            {[
-              [me.stats.reports, "Reports"],
-              [me.stats.on_spot_votes, "On-the-spot votes"],
-              [me.stats.pinned, "Pinned", "/gg/pinned"],
-            ].map(([n, label, to], i) => {
-              const body = (
+        <div className="space-y-6">
+          <ProfileHeader
+            person={me}
+            own
+            categories={cats.data}
+            onEdit={() => setDialog("edit")}
+            onPhoto={() => setDialog("photo")}
+            onHowReputation={() => setDialog("rep")}
+            extra={
+              <button onClick={() => navigate(`${base}/people/${me.id}`)} className="mt-4 inline-flex min-h-11 items-center gap-2 text-[15px] font-bold text-primary underline-offset-4 hover:underline">
+                <Icon name="eye" className="size-5" />
+                See how neighbours see your profile
+              </button>
+            }
+          />
+          <Completeness me={me} onEdit={() => setDialog("edit")} onPhoto={() => setDialog("photo")} />
+          <Tabs
+            label="Profile sections"
+            value={tab}
+            onChange={setTab}
+            tabs={[
+              { value: "overview", label: "Overview" },
+              { value: "activity", label: "Activity" },
+              { value: "settings", label: "Settings" },
+            ]}
+          >
+            <m.div key={tab} className="mt-5 space-y-6" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={enter()}>
+              {tab === "overview" && (
                 <>
-                  <span className="num block text-[26px] font-extrabold">{n}</span>
-                  <span className="block text-sm text-ink/80">{label}</span>
+                  <StatTiles stats={me.stats} />
+                  <Badges stats={me.stats} rep={me.reputation} />
                 </>
-              );
-              return to ? (
-                <Link key={label} to={to} className={cx("px-3 py-3.5 hover:bg-soft/30", i > 0 && "border-l border-line")}>
-                  {body}
-                </Link>
-              ) : (
-                <div key={label} className={cx("px-3 py-3.5", i > 0 && "border-l border-line")}>
-                  {body}
-                </div>
-              );
-            })}
-          </section>
-
-          <section className="mt-7">
-            <SectionHead
-              title={type === "price" ? "My prices" : "My reports"}
-              action={
-                <Link to={`${base}/profile/reports`} className="min-h-11 content-center font-bold underline underline-offset-4">
-                  See all
-                </Link>
-              }
-            />
-            {mine.loading && <Skeleton className="mt-3 h-20 w-full" />}
-            {mine.data && mine.data.length === 0 && <p className="py-4 text-ink/80">{type === "civic" ? "You haven't posted a report yet." : "You haven't reported a price yet."}</p>}
-            {mine.data && (
-              <ul>
-                {mine.data.map((r) => (
-                  <ReportRow key={r.id} r={r} onOpen={setOpen} />
-                ))}
-              </ul>
-            )}
-          </section>
-
-          <section className="mt-7">
-            <SectionHead
-              title="My areas"
-              action={
-                <Link to={`${base}/profile/areas`} className="min-h-11 content-center font-bold underline underline-offset-4">
-                  Edit
-                </Link>
-              }
-            />
-            <ul>
-              {me.addresses.map((a) => (
-                <li key={a.id} className="border-b border-line/70 py-3.5 text-[17px]">
-                  <b>{kindLabel(a.kind)}</b>: {a.ward_name_en}
-                </li>
-              ))}
-            </ul>
-          </section>
-
-          <section className="mt-7">
-            <SectionHead title="Account" />
-            <ul>
-              <RowLink title="Permissions" sub="Location, camera, research use" onClick={() => setDialog("perm")} />
-              <RowLink title="Language" sub="English" onClick={() => setDialog("lang")} />
-              <RowLink
-                title="Log out"
-                onClick={async () => {
-                  await signOut();
-                  navigate("/login", { replace: true });
-                }}
-              />
-              <RowLink title="Delete account" sub={"Your name is removed. Your reports stay, shown as “reporter unavailable”."} danger onClick={remove} />
-            </ul>
-          </section>
+              )}
+              {tab === "activity" && (
+                <>
+                  <section>
+                    <SectionHead
+                      title={type === "price" ? "My prices" : "My reports"}
+                      action={
+                        <Link to={`${base}/profile/reports`} className="min-h-11 content-center font-bold underline underline-offset-4">
+                          See all
+                        </Link>
+                      }
+                    />
+                    {mine.loading && <Skeleton className="mt-3 h-20 w-full" />}
+                    {mine.data && mine.data.length === 0 && <p className="py-4 text-ink/80">{type === "civic" ? "You haven't posted a report yet." : "You haven't reported a price yet."}</p>}
+                    {mine.data && (
+                      <ul>
+                        {mine.data.map((r) => (
+                          <ReportRow key={r.id} r={r} onOpen={setOpen} />
+                        ))}
+                      </ul>
+                    )}
+                  </section>
+                  <section>
+                    <SectionHead title="Saved" />
+                    <ul>
+                      <RowLink title="Pinned reports" sub={`${me.stats.pinned} pinned · you get a notification when their status changes`} onClick={() => navigate("/gg/pinned")} />
+                    </ul>
+                  </section>
+                </>
+              )}
+              {tab === "settings" && (
+                <>
+                  <section>
+                    <SectionHead
+                      title="My areas"
+                      action={
+                        <Link to={`${base}/profile/areas`} className="min-h-11 content-center font-bold underline underline-offset-4">
+                          Edit
+                        </Link>
+                      }
+                    />
+                    <p className="mt-2 text-sm text-muted">Your feed and alerts come from these wards. They also show on your profile.</p>
+                    <ul>
+                      {me.addresses.map((a) => (
+                        <li key={a.id} className="border-b border-line/70 py-3.5 text-[17px]">
+                          <b>{kindLabel(a.kind)}</b>: {a.ward_name_en}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
+                  <Appearance />
+                  <section>
+                    <SectionHead title="Account" />
+                    <ul>
+                      <RowLink title="Edit profile" sub="Name, bio, what you do, link, email, interests" onClick={() => setDialog("edit")} />
+                      <RowLink title="Profile photo" sub={me.avatar_url ? "Change or remove" : "Add a photo"} onClick={() => setDialog("photo")} />
+                      <RowLink title="Permissions" sub="Location, camera, research use" onClick={() => setDialog("perm")} />
+                      <RowLink title="Language" sub="English" onClick={() => setDialog("lang")} />
+                      <RowLink
+                        title="Log out"
+                        onClick={async () => {
+                          await signOut();
+                          navigate("/login", { replace: true });
+                        }}
+                      />
+                      <RowLink title="Delete account" sub={"Your name, photo and profile details are removed. Your reports stay, shown as “reporter unavailable”."} danger onClick={remove} />
+                    </ul>
+                  </section>
+                </>
+              )}
+            </m.div>
+          </Tabs>
         </div>
       )}
       <ReportDialog id={open} onClose={() => setOpen(null)} />
@@ -402,6 +445,8 @@ export function Profile() {
       <Dialog open={dialog === "lang"} onClose={() => setDialog(null)} title="Language">
         <p className="text-[16px] leading-relaxed">The app is in English for the pilot. Categories and wards also show their Bangla names. A full Bangla interface is planned (C3).</p>
       </Dialog>
+      {me && <EditProfile open={dialog === "edit"} onClose={() => setDialog(null)} me={me} categories={cats.data} onSaved={refresh} />}
+      <PhotoEditor open={dialog === "photo"} onClose={() => setDialog(null)} hasPhoto={Boolean(me?.avatar_url)} onSaved={refresh} />
     </Shell>
   );
 }

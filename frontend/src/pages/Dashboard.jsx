@@ -12,6 +12,7 @@ import { fmtDate, fmtShort, fmtTime } from "../lib/format.js";
 import { getPosition } from "../lib/geo.js";
 import { useRoute } from "../lib/router.jsx";
 import { useApp, useData } from "../lib/store.jsx";
+import { useAppearance } from "../lib/theme.jsx";
 
 const MapView = lazy(() => import("../components/MapView.jsx"));
 
@@ -47,13 +48,14 @@ function SideHead({ children }) {
 
 function LayerChip({ on, onClick, children }) {
   return (
-    <button onClick={onClick} aria-pressed={on} className={cx("min-h-10 rounded-full border-[1.5px] px-4 text-[15px] font-bold", on ? "border-primary bg-primary text-white" : "border-line bg-white text-ink")}>
+    <button onClick={onClick} aria-pressed={on} className={cx("min-h-10 rounded-full border-[1.5px] px-4 text-[15px] font-bold", on ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink")}>
       {children}
     </button>
   );
 }
 
 export default function Dashboard() {
+  const mapTheme = useAppearance().resolved.theme; // a new map (night or day palette) when the theme changes
   const { live } = useApp();
   const { query } = useRoute();
   const [f, setF] = useState(DEFAULTS);
@@ -221,7 +223,7 @@ export default function Dashboard() {
 
       <div className="mt-6 grid gap-8 xl:grid-cols-[1fr_340px]">
         {/* Map card */}
-        <section className="overflow-hidden rounded-2xl border border-line/80 bg-white">
+        <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-line/70 px-4 py-3">
             {mode === "2d" ? (
               <>
@@ -265,12 +267,13 @@ export default function Dashboard() {
           </div>
           <div className="relative h-[60vh] min-h-[420px]">
             {no3d && mode === "2d" && (
-              <p className="absolute left-4 top-4 z-10 flex max-w-xs items-start gap-2 rounded-xl border border-line bg-white px-3 py-2 text-sm shadow-1">
+              <p className="absolute left-4 top-4 z-10 flex max-w-xs items-start gap-2 rounded-xl border border-line bg-surface px-3 py-2 text-sm shadow-1">
                 <Icon name="info" className="mt-0.5 size-4 shrink-0" /> This device can't show the 3D map. You're seeing the 2D map instead. All numbers and lists still work.
               </p>
             )}
             <Suspense fallback={<Skeleton className="size-full rounded-none" />}>
               <MapView
+                key={mapTheme}
                 ref={ctl}
                 points={points.data}
                 grid={grid.data}
@@ -290,7 +293,7 @@ export default function Dashboard() {
             </Suspense>
             <MapControls mode={mode} api={ctl} />
             {liveTag && (
-              <span className="absolute left-1/2 top-4 z-10 flex -translate-x-1/2 items-center gap-2 rounded-lg bg-ink px-3 py-1.5 text-[13px] font-bold text-white shadow-2">
+              <span className="absolute left-1/2 top-4 z-10 flex -translate-x-1/2 items-center gap-2 rounded-lg bg-inverse px-3 py-1.5 text-[13px] font-bold text-on-inverse shadow-2">
                 <span className="relative size-2.5">
                   <span className="cp-ripple absolute inset-0 rounded-full bg-line" />
                   <span className="absolute inset-0 rounded-full bg-line" />
@@ -298,16 +301,16 @@ export default function Dashboard() {
                 {liveTag}
               </span>
             )}
-            <div className="absolute bottom-4 left-4 z-10 max-w-[300px] rounded-xl border border-line/80 bg-white/95 p-3.5 text-sm shadow-1">
+            <div className="absolute bottom-4 left-4 z-10 max-w-[300px] rounded-xl border border-line/80 bg-surface/95 p-3.5 text-sm shadow-1">
               {mode === "2d" ? (
                 <>
                   <p className="font-bold">Legend</p>
                   <ul className="mt-2 space-y-1.5">
                     <li className="flex items-center gap-2">
                       <span className="flex h-2.5 w-24 overflow-hidden rounded-sm">
-                        <span className="flex-1 bg-line" />
-                        <span className="flex-1 bg-primary" />
-                        <span className="flex-1 bg-ink" />
+                        <span className="flex-1 bg-[#86c8c8]" />
+                        <span className="flex-1 bg-[#357575]" />
+                        <span className="flex-1 bg-[#1c3d3d]" />
                       </span>
                       Density of reports
                     </li>
@@ -315,7 +318,7 @@ export default function Dashboard() {
                       <span className="h-3.5 w-5 rounded-sm border-2 border-dashed border-warn" /> Hotspot area (last 30 days)
                     </li>
                     <li className="flex items-center gap-2">
-                      <span className="size-3.5 rounded-full bg-ink" /> Cluster (number of reports)
+                      <span className="size-3.5 rounded-full bg-[#1c3d3d]" /> Cluster (number of reports)
                     </li>
                   </ul>
                   <p className="mt-2 text-primary">Not proof of a problem. Open a report to see its evidence.</p>
@@ -337,7 +340,7 @@ export default function Dashboard() {
           </div>
           {mode === "2d" && (
             <div className="flex flex-wrap items-center gap-4 border-t border-line/70 px-4 py-3">
-              <button onClick={togglePlay} aria-pressed={playing} aria-label={playing ? "Stop the time-lapse" : "Play the time-lapse"} className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-white hover:brightness-90">
+              <button onClick={togglePlay} aria-pressed={playing} aria-label={playing ? "Stop the time-lapse" : "Play the time-lapse"} className="grid size-12 shrink-0 place-items-center rounded-full bg-primary text-on-primary hover:brightness-95">
                 <Icon name={playing ? "pause" : "play"} className="size-5" />
               </button>
               <label className="min-w-48 flex-1">

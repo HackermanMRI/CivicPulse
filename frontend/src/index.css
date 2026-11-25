@@ -19,36 +19,131 @@
   unicode-range: U+0964-0965, U+0980-09FF, U+200C-200D, U+25CC;
 }
 
-/* Colour roles per area (UI decisions). The module wrapper sets data-module; everything uses these roles. */
+/* ---------------------------------------------------------------------------------------------------------------
+   Colour roles (UI v2, 25 Nov 2026). Each module wrapper sets data-module; <html> carries data-theme (light/dark)
+   and data-glass (on/off). Components only use the roles below, never raw colours, so light, dark and the
+   reduced-transparency look all come from this one place.
+     bg       page background            surface   cards, sheets, inputs
+     soft     tinted fills, chips        line      borders and dividers
+     primary  actions, active states     on-primary  text/icons on primary
+     ink      main text                  muted     secondary text
+     inverse  dark panels (form header, tooltip, offline bar), on-inverse = text on them
+   All text pairs were checked against WCAG 2.2 AA (≥ 4.5:1).
+   --------------------------------------------------------------------------------------------------------------- */
 :root,
 [data-module="shell"] {
   --bg: #fbf6ef;
+  --surface: #ffffff;
   --soft: #edd3b1;
   --line: #d1b186;
+  --hair: #ead9c3;
   --primary: #8d5a3a;
+  --on-primary: #ffffff;
   --ink: #4b2b18;
+  --muted: #7a5a44;
+  --inverse: #4b2b18;
+  --on-inverse: #ffffff;
+  --glow: #e0a57a;
+  --shadow-rgb: 75 43 24;
 }
 [data-module="gg"] {
-  --bg: #f6fbfb;
-  --soft: #bee1e1;
-  --line: #86c8c8;
-  --primary: #357575;
-  --ink: #1c3d3d;
+  --bg: #eef6f5;
+  --surface: #ffffff;
+  --soft: #cfe6e3;
+  --line: #8fc3bd;
+  --hair: #d3e6e3;
+  --primary: #17695f;
+  --on-primary: #ffffff;
+  --ink: #0e2f2e;
+  --muted: #4a6664;
+  --inverse: #0e2f2e;
+  --on-inverse: #ffffff;
+  --glow: #2ec4b0;
+  --shadow-rgb: 14 47 46;
 }
 [data-module="pp"] {
-  --bg: #f3f8f5;
-  --soft: #c0dfd3;
+  --bg: #f2f7f1;
+  --surface: #ffffff;
+  --soft: #cfe5d6;
   --line: #9ccbb8;
-  --primary: #486856;
-  --ink: #3a4c40;
+  --hair: #d6e8dc;
+  --primary: #3c6b4a;
+  --on-primary: #ffffff;
+  --ink: #1f3326;
+  --muted: #4b6354;
+  --inverse: #1f3326;
+  --on-inverse: #ffffff;
+  --glow: #e8a33d;
+  --shadow-rgb: 31 51 38;
+}
+
+/* Dark theme (UI v2, revised 26 Nov): one calm slate-blue base for every module, so night use is easy on the eyes.
+   Only the accent changes per module, and accents are soft pastels (no neon). Text is off-white, not pure white.
+   Shadows turn black so they never glow. */
+:root[data-theme="dark"],
+:root[data-theme="dark"] [data-module] {
+  --bg: #151b22;
+  --surface: #1c242d;
+  --soft: #26313c;
+  --line: #6b7b8c;
+  --hair: #29343f;
+  --ink: #dde4e9;
+  --muted: #a0adb8;
+  --inverse: #26313c;
+  --on-inverse: #dde4e9;
+  --shadow-rgb: 0 0 0;
+}
+:root[data-theme="dark"],
+:root[data-theme="dark"] [data-module="shell"] {
+  --primary: #e6b590;
+  --on-primary: #1f1610;
+  --glow: #e6b590;
+}
+:root[data-theme="dark"] [data-module="gg"] {
+  --primary: #7fc8ba;
+  --on-primary: #10201d;
+  --glow: #7fc8ba;
+}
+:root[data-theme="dark"] [data-module="pp"] {
+  --primary: #a7cba0;
+  --on-primary: #142016;
+  --glow: #e3b66a;
+}
+
+/* Category identity (UI v2, V3/V5). White text on every hue is ≥ 4.75:1. */
+:root {
+  --cat-waterlogging: #1f6fc5;
+  --cat-garbage: #a8620a;
+  --cat-damaged_road: #c2410c;
+  --cat-drainage: #7a5a2e;
+  --cat-water_pollution: #3f7f2e;
+  --cat-deforestation: #2e7d4f;
+  --cat-streetlight: #8a6a00;
+  --cat: var(--primary);
+  --live: #e5484d;
+  --live-text: #b4232a;
+}
+:root[data-theme="dark"] {
+  --live-text: #f49a9e;
 }
 
 @theme inline {
   --color-bg: var(--bg);
+  --color-surface: var(--surface);
   --color-soft: var(--soft);
   --color-line: var(--line);
+  --color-hair: var(--hair);
   --color-primary: var(--primary);
+  --color-on-primary: var(--on-primary);
   --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-inverse: var(--inverse);
+  --color-on-inverse: var(--on-inverse);
+  --color-glow: var(--glow);
+  --color-cat: var(--cat);
+  --color-cat-text: color-mix(in srgb, var(--cat) 78%, black);
+  --color-live: var(--live);
+  --color-live-text: var(--live-text);
   --font-sans: "Anek Bangla", system-ui, "Noto Sans Bengali", sans-serif;
 }
 
@@ -68,15 +163,47 @@
   --color-warn-soft: #fbefdc;
   --color-info-soft: #e6eefb;
   /* Radius scale (board): inputs 8 = rounded-lg, buttons 12 = rounded-xl, cards 16 = rounded-2xl,
-     pop-ups 20 = Dialog, chips = rounded-full. Tailwind's default scale already matches, so no override. */
+     pop-ups 20 = Dialog, chips = rounded-full. UI v2 cards use 24 (rounded-3xl). */
   --ease-enter: cubic-bezier(0.2, 0, 0, 1);
   --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Dark theme: soft feedback fills become deep tints, and feedback text lifts so it stays ≥ 4.5:1 on dark surfaces.
+   Fills that carry white text (bg-err, bg-ok, status chips) keep their light-theme colours in both themes. */
+:root[data-theme="dark"] {
+  --color-err-soft: #3a2426;
+  --color-ok-soft: #1d3329;
+  --color-warn-soft: #3a3020;
+  --color-info-soft: #1f2c42;
+  color-scheme: dark;
+}
+:root[data-theme="dark"] .text-err {
+  color: #f2a19a;
+}
+:root[data-theme="dark"] .text-ok {
+  color: #7dd3a8;
+}
+:root[data-theme="dark"] .text-warn-ink,
+:root[data-theme="dark"] .text-warn {
+  color: #ebc07a;
+}
+:root[data-theme="dark"] .text-st-high,
+:root[data-theme="dark"] .text-info {
+  color: #9cc0f5;
+}
+:root[data-theme="dark"] .text-cat-text {
+  color: color-mix(in srgb, var(--cat) 45%, white);
+}
+:root[data-theme="dark"] .border-err {
+  border-color: #f2a19a;
 }
 
 /* Base and component styles live in cascade layers so Tailwind utilities (layer "utilities") can override them. */
 @layer base {
   html {
     -webkit-text-size-adjust: 100%;
+    background: var(--bg);
   }
   body {
     margin: 0;
@@ -85,6 +212,7 @@
     font-family: var(--font-sans);
     font-size: 16px;
     line-height: 1.5;
+    transition: background-color 220ms var(--ease-enter), color 220ms var(--ease-enter);
   }
   * {
     -webkit-tap-highlight-color: transparent;
@@ -97,6 +225,9 @@
   h2,
   h3 {
     text-wrap: balance;
+  }
+  ::selection {
+    background: color-mix(in srgb, var(--primary) 30%, transparent);
   }
 }
 
@@ -111,20 +242,89 @@
     font-stretch: 112.5%;
     letter-spacing: -0.005em;
   }
+  /* The UI v2 signature: the widest cut, for area names and the feed heading. */
+  .wide {
+    font-weight: 800;
+    font-stretch: 122%;
+    letter-spacing: -0.02em;
+  }
   .tint {
-    background: color-mix(in srgb, var(--soft) 35%, white);
+    background: color-mix(in srgb, var(--soft) 35%, var(--surface));
   }
   .shadow-1 {
-    box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent);
+    box-shadow: 0 1px 2px rgb(var(--shadow-rgb) / 0.12);
   }
   .shadow-2 {
-    box-shadow: 0 4px 14px color-mix(in srgb, var(--ink) 14%, transparent);
+    box-shadow: 0 4px 14px rgb(var(--shadow-rgb) / 0.14);
   }
   .shadow-3 {
-    box-shadow: 0 12px 32px color-mix(in srgb, var(--ink) 18%, transparent);
+    box-shadow: 0 12px 32px rgb(var(--shadow-rgb) / 0.2);
   }
   .rule {
     border-top: 2px solid var(--line);
+  }
+
+  /* ---------- Liquid glass (UI v2, V4) ----------
+     Only for the floating control layer: bars, the bottom nav, toasts, the live pill, sheet headers.
+     Never on cards (content), never stacked on another glass surface, never over the map canvas.
+     Light blur + saturation and a top specular edge; falls back to a solid surface when the browser lacks
+     backdrop-filter, when the person turns on "Reduce transparency", or when the OS asks for more contrast. */
+  .glass {
+    background: color-mix(in srgb, var(--surface) 64%, transparent);
+    -webkit-backdrop-filter: blur(14px) saturate(170%);
+    backdrop-filter: blur(14px) saturate(170%);
+    border: 1px solid color-mix(in srgb, white 55%, transparent);
+    box-shadow:
+      0 8px 24px rgb(var(--shadow-rgb) / 0.14),
+      inset 0 1px 0 rgb(255 255 255 / 0.35);
+  }
+  :root[data-theme="dark"] .glass {
+    background: color-mix(in srgb, var(--surface) 74%, transparent);
+    border-color: rgb(255 255 255 / 0.08);
+    box-shadow:
+      0 8px 24px rgb(0 0 0 / 0.45),
+      inset 0 1px 0 rgb(255 255 255 / 0.08);
+  }
+  :root[data-glass="off"] .glass {
+    background: var(--surface);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border-color: var(--hair);
+  }
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      background: var(--surface);
+    }
+  }
+  @media (prefers-contrast: more) {
+    .glass {
+      background: var(--surface);
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+      border-color: var(--ink);
+    }
+  }
+
+  /* Soft ambient light behind the top of feed-like pages (content layer, decoration only). */
+  .ambient {
+    position: absolute;
+    inset: 0 0 auto;
+    height: 420px;
+    pointer-events: none;
+    background:
+      radial-gradient(60% 70% at 20% 10%, color-mix(in srgb, var(--glow) 22%, transparent), transparent 70%),
+      radial-gradient(45% 55% at 90% 0%, color-mix(in srgb, #f2a922 14%, transparent), transparent 70%);
+  }
+  :root[data-theme="dark"] .ambient {
+    opacity: 0.35;
+  }
+
+  /* Pressable surfaces sink a little under the finger (transform only). */
+  .press {
+    transition: transform 160ms var(--ease-enter);
+  }
+  .press:active {
+    transform: scale(0.975);
   }
 
   /* Signature moment: the post-success pulse (only after a 2xx). */
@@ -139,6 +339,7 @@
     border-radius: 9999px;
     border: 3px solid var(--primary);
     animation: cp-ring 700ms var(--ease-enter) both;
+    pointer-events: none;
   }
   .cp-pulse::after {
     animation-delay: 160ms;
@@ -166,7 +367,7 @@
   }
 
   .cp-skeleton {
-    background: linear-gradient(90deg, var(--soft) 25%, color-mix(in srgb, var(--soft) 55%, white) 50%, var(--soft) 75%);
+    background: linear-gradient(90deg, var(--soft) 25%, color-mix(in srgb, var(--soft) 55%, var(--surface)) 50%, var(--soft) 75%);
     background-size: 200% 100%;
     animation: cp-shimmer 1.4s linear infinite;
   }
@@ -176,11 +377,204 @@
     }
   }
 
-  ::view-transition-old(root),
-  ::view-transition-new(root) {
-    animation-duration: 150ms;
+  /* Live heartbeat: a dot that breathes, and a ring that pings outward (transform + opacity only). */
+  .cp-live-dot {
+    position: relative;
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 9999px;
+    background: var(--live);
+  }
+  .cp-live-dot::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: var(--live);
+    animation: cp-ping 1.8s var(--ease-enter) infinite;
+  }
+  @keyframes cp-ping {
+    from {
+      transform: scale(1);
+      opacity: 0.55;
+    }
+    to {
+      transform: scale(3);
+      opacity: 0;
+    }
+  }
+  .cp-live-ring {
+    position: absolute;
+    inset: -3px;
+    border-radius: 9999px;
+    background: conic-gradient(from 0deg, var(--cat), var(--live), var(--cat));
+    -webkit-mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+    mask: radial-gradient(farthest-side, transparent calc(100% - 2.5px), #000 calc(100% - 2px));
+    animation: cp-spin 4s linear infinite;
+  }
+  @keyframes cp-spin {
+    to {
+      transform: rotate(1turn);
+    }
   }
 
+  /* Radar on the "On the spot" button: three rings grow out of the dot, one after another. */
+  .cp-radar {
+    position: relative;
+    display: inline-grid;
+    width: 18px;
+    height: 18px;
+    place-items: center;
+    flex: none;
+  }
+  .cp-radar::before {
+    content: "";
+    width: 7px;
+    height: 7px;
+    border-radius: 9999px;
+    background: currentColor;
+  }
+  .cp-radar span {
+    position: absolute;
+    inset: 0;
+    border-radius: 9999px;
+    border: 2px solid currentColor;
+    opacity: 0;
+    animation: cp-radar 2.4s var(--ease-enter) infinite;
+  }
+  .cp-radar span:nth-child(2) {
+    animation-delay: 0.8s;
+  }
+  .cp-radar span:nth-child(3) {
+    animation-delay: 1.6s;
+  }
+  @keyframes cp-radar {
+    0% {
+      transform: scale(0.35);
+      opacity: 0.9;
+    }
+    100% {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+
+  /* The pulse line in the feed header draws itself once, then a bright blip runs along it. */
+  .cp-pulse-line path {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: cp-draw 1.1s var(--ease-enter) 0.15s forwards;
+  }
+  .cp-pulse-line .blip {
+    stroke-dasharray: 0.06 1;
+    stroke-dashoffset: 0.06;
+    animation: cp-blip 2.6s linear 1.3s infinite;
+  }
+  @keyframes cp-draw {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+  @keyframes cp-blip {
+    to {
+      stroke-dashoffset: -1;
+    }
+  }
+
+  @keyframes cp-breathe {
+    50% {
+      transform: scale(1.04) rotate(1.2deg);
+    }
+  }
+
+  /* Charts draw themselves once: lines trace in, bars grow up, areas fade in. */
+  .cp-draw {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 1;
+    animation: cp-draw 900ms var(--ease-enter) 100ms forwards;
+  }
+  .cp-grow {
+    transform-origin: bottom;
+    animation: cp-grow 420ms var(--ease-enter) both;
+  }
+  @keyframes cp-grow {
+    from {
+      transform: scaleY(0);
+    }
+  }
+  .cp-fade {
+    animation: cp-fadein 600ms var(--ease-enter) 500ms both;
+  }
+  @keyframes cp-fadein {
+    from {
+      opacity: 0;
+    }
+  }
+
+  /* One light shine across a panel that has just been revealed. */
+  .cp-shine {
+    position: relative;
+    overflow: hidden;
+  }
+  .cp-shine::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.28) 50%, transparent 65%);
+    transform: translateX(-100%);
+    animation: cp-sweep 900ms var(--ease-enter) 360ms forwards;
+    pointer-events: none;
+  }
+  :root[data-theme="dark"] .cp-shine::after {
+    background: linear-gradient(105deg, transparent 35%, rgb(255 255 255 / 0.1) 50%, transparent 65%);
+  }
+  @keyframes cp-sweep {
+    to {
+      transform: translateX(100%);
+    }
+  }
+
+  /* Scroll-driven extras (progressive enhancement: Chrome 115+, Safari 26+; elsewhere they simply don't run).
+     Cards rise in as they enter the screen; report photos drift a little while they cross it. */
+  @supports (animation-timeline: view()) {
+    .cp-rise {
+      animation: cp-rise linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 40%;
+    }
+    .cp-drift {
+      animation: cp-drift linear both;
+      animation-timeline: view();
+      animation-range: cover 0% cover 100%;
+    }
+  }
+  @keyframes cp-rise {
+    from {
+      opacity: 0.4;
+      transform: translateY(24px) scale(0.97);
+    }
+  }
+  @keyframes cp-drift {
+    from {
+      transform: scale(1.08) translateY(-3%);
+    }
+    to {
+      transform: scale(1.08) translateY(3%);
+    }
+  }
+
+  ::view-transition-old(root),
+  ::view-transition-new(root) {
+    animation-duration: 180ms;
+  }
+  /* Card photo → report pop-up photo (B6 shared element). */
+  ::view-transition-group(report-photo) {
+    animation-duration: 320ms;
+    animation-timing-function: cubic-bezier(0.2, 0, 0, 1);
+  }
+
+  /* Reduced motion: from the OS, or the in-app switch (data-motion="reduce" on <html>). */
   @media (prefers-reduced-motion: reduce) {
     *,
     *::before,
@@ -190,9 +584,31 @@
       transition-duration: 1ms !important;
     }
     .cp-pulse::before,
-    .cp-pulse::after {
+    .cp-pulse::after,
+    .cp-radar span,
+    .cp-live-dot::after {
       display: none;
     }
+    .cp-rise,
+    .cp-drift {
+      animation: none !important;
+    }
+  }
+  :root[data-motion="reduce"] *,
+  :root[data-motion="reduce"] *::before,
+  :root[data-motion="reduce"] *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+  }
+  :root[data-motion="reduce"] .cp-pulse::before,
+  :root[data-motion="reduce"] .cp-pulse::after,
+  :root[data-motion="reduce"] .cp-radar span,
+  :root[data-motion="reduce"] .cp-live-dot::after {
+    display: none;
+  }
+  :root[data-motion="reduce"] :is(.cp-rise, .cp-drift) {
+    animation: none !important;
   }
 
   .maplibregl-ctrl-attrib {

@@ -91,7 +91,7 @@ export function Camera({ purpose, reportId, retakeOf = null, onShot, onCancel, c
 
   return (
     <div className="space-y-3">
-      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-ink">
+      <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-black">
         {preview ? (
           <img src={preview.url} alt="Your photo" className="size-full object-contain" />
         ) : (

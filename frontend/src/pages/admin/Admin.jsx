@@ -19,7 +19,7 @@ function ReasonBox({ label, kind = "primary", action, onDone, placeholder, note 
   const ok = reason.trim().length >= 5;
   return (
     <form
-      className="rounded-2xl border border-line bg-white p-4"
+      className="rounded-2xl border border-line bg-surface p-4"
       onSubmit={async (e) => {
         e.preventDefault();
         setBusy(true);
@@ -50,7 +50,7 @@ function ReasonBox({ label, kind = "primary", action, onDone, placeholder, note 
 
 function Table({ head, children, className }) {
   return (
-    <div className={cx("overflow-x-auto rounded-2xl border border-line bg-white", className)}>
+    <div className={cx("overflow-x-auto rounded-2xl border border-line bg-surface", className)}>
       <table className="w-full text-[15px]">
         <thead>
           <tr className="border-b border-line text-left text-sm text-primary">
@@ -139,7 +139,7 @@ function ReportDetail({ id, onChanged }) {
           {r.visibility_reason && <p className="text-sm">Hidden because: “{r.visibility_reason}”</p>}
         </div>
       </div>
-      {r.description && <p className="rounded-xl bg-white px-4 py-3 text-[15px] leading-relaxed">{r.description}</p>}
+      {r.description && <p className="rounded-xl bg-surface px-4 py-3 text-[15px] leading-relaxed">{r.description}</p>}
       {res?.components && (
         <div>
           <Segmented
@@ -164,7 +164,7 @@ function ReportDetail({ id, onChanged }) {
         <section className="space-y-2">
           <h3 className="font-bold">Abuse reports</h3>
           {r.abuse_reports.map((a) => (
-            <div key={a.id} className="space-y-2 rounded-xl bg-white p-3">
+            <div key={a.id} className="space-y-2 rounded-xl bg-surface p-3">
               <p className="text-[15px]">
                 “{a.reason}” · <b>{a.state}</b> · {fmtDateTime(a.created_at)}
               </p>
@@ -173,7 +173,7 @@ function ReportDetail({ id, onChanged }) {
           ))}
         </section>
       )}
-      <details className="rounded-2xl border border-line bg-white p-4">
+      <details className="rounded-2xl border border-line bg-surface p-4">
         <summary className="cursor-pointer font-bold">Votes ({r.votes.length}) and scoring history ({r.runs.length})</summary>
         <ul className="mt-3 space-y-1 text-sm">
           {r.votes.map((v) => (
@@ -224,7 +224,7 @@ function ReportReview({ counts, refreshCounts }) {
         <div className="min-w-0">
           {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
           {list.loading && <Skeleton className="h-64 rounded-2xl" />}
-          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-white p-6 text-center text-[15px]">Nothing in this queue.</p>}
+          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-surface p-6 text-center text-[15px]">Nothing in this queue.</p>}
           {list.data?.length > 0 && (
             <Table head={["Report", "Category", "Flags", "Posted"]}>
               {list.data.map((r) => (
@@ -273,7 +273,7 @@ function AlertDetail({ id, onSolved }) {
   return (
     <div className="space-y-4">
       <h2 className="display text-xl">{data.kind === "pair_agreement" ? "Pair agreement (possible vote ring)" : "Device rule violation"}</h2>
-      <section className="rounded-2xl border border-line bg-white p-4">
+      <section className="rounded-2xl border border-line bg-surface p-4">
         <h3 className="font-bold">Accounts</h3>
         <ul className="mt-2 space-y-1 text-[15px]">
           {data.users.map(
@@ -325,7 +325,7 @@ function AlertDetail({ id, onSolved }) {
           />
         </>
       ) : (
-        <p className="rounded-xl bg-white p-4 text-[15px]">
+        <p className="rounded-xl bg-surface p-4 text-[15px]">
           Solved: <b>{data.outcome?.replace("_", " ")}</b>. Note: {data.note}
         </p>
       )}
@@ -346,7 +346,7 @@ function CollusionAlerts({ refreshCounts }) {
       <div className="mt-5 grid gap-6 xl:grid-cols-[5fr_7fr]">
         <div className="min-w-0">
           {list.error && <ErrorState error={list.error} onRetry={list.reload} />}
-          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-white p-6 text-center text-[15px]">No alerts here.</p>}
+          {list.data?.length === 0 && <p className="rounded-2xl border border-line bg-surface p-6 text-center text-[15px]">No alerts here.</p>}
           {list.data?.length > 0 && (
             <Table head={["Alert", "Accounts", "Reports", "Raised"]}>
               {list.data.map((a) => (
@@ -460,7 +460,7 @@ function UserPage({ id }) {
           </tr>
         ))}
       </Table>
-      <details className="rounded-2xl border border-line bg-white p-4">
+      <details className="rounded-2xl border border-line bg-surface p-4">
         <summary className="cursor-pointer font-bold">Reputation events ({u.reputation_events.length}) and moderation history ({u.moderation.length})</summary>
         <ul className="mt-3 max-h-56 space-y-1 overflow-y-auto text-sm">
           {u.reputation_events.map((e, i) => (
@@ -549,7 +549,7 @@ export default function Admin() {
   const section = userId ? "/admin/users" : NAV.find(([to]) => path.startsWith(to))?.[0] || "/admin/reports";
   return (
     <div data-module="shell" className="min-h-dvh bg-bg text-ink lg:grid lg:grid-cols-[264px_1fr]">
-      <aside className="flex flex-col bg-ink text-white lg:sticky lg:top-0 lg:h-dvh">
+      <aside className="flex flex-col bg-inverse text-on-inverse lg:sticky lg:top-0 lg:h-dvh">
         <div className="flex items-center gap-3 px-5 py-5">
           <Logo size="sm" />
           <span className="display text-lg">Admin</span>
@@ -559,19 +559,19 @@ export default function Admin() {
             const on = section === to;
             const n = key ? counts.data?.[key] : null;
             return (
-              <Link key={to} to={to} aria-current={on ? "page" : undefined} className={cx("flex min-h-12 shrink-0 items-center justify-between gap-3 rounded-xl px-3.5 font-bold", on ? "bg-primary text-white" : "text-white/90 hover:bg-white/10")}>
+              <Link key={to} to={to} aria-current={on ? "page" : undefined} className={cx("flex min-h-12 shrink-0 items-center justify-between gap-3 rounded-xl px-3.5 font-bold", on ? "bg-primary text-on-primary" : "text-on-inverse/90 hover:bg-on-inverse/10")}>
                 {label}
                 {n ? <span className="num grid h-6 min-w-6 place-items-center rounded-full bg-err px-1.5 text-[13px]">{n}</span> : null}
               </Link>
             );
           })}
         </nav>
-        <div className="space-y-2 px-5 pb-4 text-sm text-white/80 lg:mt-auto lg:py-5">
+        <div className="space-y-2 px-5 pb-4 text-sm text-on-inverse/80 lg:mt-auto lg:py-5">
           <p>
             Signed in as {user.display_name || "admin"}. Session ends after 1 day.
           </p>
           <button
-            className="min-h-11 font-bold text-white underline"
+            className="min-h-11 font-bold text-on-inverse underline"
             onClick={async () => {
               await signOut();
               navigate("/login", { replace: true });
