@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 
 from app.config import settings
-from app.routers import admin, auth, capture, feed, geo, health, insights, notifications, prices, reports, users, votes
+from app.routers import admin, auth, capture, feed, geo, health, insights, notifications, people, prices, reports, users, votes
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
@@ -43,7 +43,7 @@ async def security_headers(request: Request, call_next):
     return response
 
 
-for r in (health, auth, users, geo, capture, reports, feed, votes, notifications, insights, prices, admin):
+for r in (health, auth, users, people, geo, capture, reports, feed, votes, notifications, insights, prices, admin):
     app.include_router(r.router)
 
 

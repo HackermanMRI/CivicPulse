@@ -5,7 +5,7 @@ import uuid
 from datetime import datetime
 
 from sqlalchemy import Boolean, CheckConstraint, Enum, ForeignKey, Integer, String, Text, UniqueConstraint
-from sqlalchemy.dialects.postgresql import UUID
+from sqlalchemy.dialects.postgresql import ARRAY, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, created_at, ts, uuid_pk
@@ -30,6 +30,16 @@ class User(Base):
     state: Mapped[str] = mapped_column(USER_STATE, default="active", nullable=False)
     preferred_module: Mapped[str | None] = mapped_column(String(20))    # green_guard | price_patrol
     is_seed: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)  # DEMO account
+    # Public profile (UI v2, migration 0002). All optional; shown to others only after they voted on one of this
+    # person's reports. The phone and home/work wards are never public.
+    bio: Mapped[str | None] = mapped_column(String(160))
+    occupation: Mapped[str | None] = mapped_column(String(60))
+    website: Mapped[str | None] = mapped_column(String(200))
+    email_public: Mapped[bool] = mapped_column(Boolean, default=False, server_default="false", nullable=False)
+    interests: Mapped[list[str]] = mapped_column(ARRAY(String(40)), default=list, server_default="{}", nullable=False)
+    avatar_path: Mapped[str | None] = mapped_column(Text)            # relative to UPLOAD_DIR, never served directly
+    avatar_updated_at: Mapped[datetime | None] = ts()
+    name_changed_at: Mapped[datetime | None] = ts()
     suspended_at: Mapped[datetime | None] = ts()
     created_at: Mapped[datetime] = created_at()
     deleted_at: Mapped[datetime | None] = ts()
