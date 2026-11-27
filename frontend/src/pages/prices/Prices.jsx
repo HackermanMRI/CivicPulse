@@ -306,13 +306,13 @@ export function PriceDashboard() {
       )}
 
       {selected && (
-        <div className="mt-5 grid gap-5 lg:grid-cols-2">
+        <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
           <History card={selected} days={days} setDays={setDays} />
           <Compare card={selected} />
         </div>
       )}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-2">
+      <div className="mt-5 grid grid-cols-[minmax(0,1fr)] gap-5 lg:grid-cols-2">
         <PanelCard title="Price alerts" sub="Alert when the verified price moves ±10% in 7 days">
           {alerts.loading && <Skeleton className="h-28" />}
           {alerts.data && alerts.data.length === 0 && <p className="text-[15px] text-ink/80">No product moved 10% or more this week.</p>}

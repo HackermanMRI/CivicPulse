@@ -99,7 +99,7 @@ export const CATEGORY_ICON = {
 };
 export const categoryIcon = (code) => CATEGORY_ICON[code] || "mapPin";
 
-// The CivicPulse mark: a pulse line on a rounded tile in the area's primary colour.
+// The CityPulse mark: a pulse line on a rounded tile in the area's primary colour.
 export function Logo({ size = "md", icon = "pulse", className = "" }) {
   const box = { sm: "size-8 rounded-[10px]", md: "size-10 rounded-xl", lg: "size-[72px] rounded-[18px]" }[size];
   const glyph = { sm: "size-5", md: "size-6", lg: "size-10" }[size];

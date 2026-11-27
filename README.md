@@ -1,4 +1,6 @@
-# CivicPulse
+# CityPulse
+
+_Formerly CivicPulse. The code, database and config keep the internal name `civicpulse`._
 
 Trust-aware credibility and uncertainty for crowdsourced civic (Green Guard) and market-price (Price Patrol) reports.
 Final-year project, CSE, Jagannath University.

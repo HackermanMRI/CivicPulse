@@ -12,6 +12,9 @@ import { Icon, Logo } from "./icons.jsx";
 import { Avatar, ModuleProvider, OfflineBanner, Toasts, cx } from "./ui.jsx";
 import { initials } from "../lib/format.js";
 
+// The app's public name (renamed from CivicPulse, 27 Nov 2026). Internal ids (database, config file, tokens) keep "civicpulse".
+export const APP_NAME = "CityPulse";
+
 const MODULE = {
   gg: { name: "Green Guard", home: "/gg/feed", icon: "pulse", other: "pp" },
   pp: { name: "Price Patrol", home: "/pp", icon: "tag", other: "gg" },
@@ -20,9 +23,9 @@ const MODULE = {
 function navItems(module) {
   if (module === "pp")
     return [
-      { to: "/pp", label: "Prices", desk: "Price Dashboard", icon: "tag" },
-      { to: "/pp/explore", label: "Explore", desk: "Explore Prices", icon: "search" },
-      { to: "/pp/report", label: "Report", desk: "Report a Price", icon: "plus", raised: true },
+      { to: "/pp", label: "Prices", desk: "Dashboard", icon: "tag" },
+      { to: "/pp/explore", label: "Explore", icon: "search" },
+      { to: "/pp/report", label: "Report", icon: "plus", raised: true },
       { to: "/pp/alerts", label: "Alerts", icon: "bell" },
       { to: "/pp/profile", label: "Profile", icon: "user" },
     ];
@@ -114,12 +117,19 @@ function DesktopBar({ module, items, active, badge }) {
         <div className="glass flex items-center gap-4 rounded-[22px] px-4 py-2.5">
           <Link to={mod.home} className="flex items-center gap-3">
             <Logo icon={mod.icon} />
-            <span className="display text-lg">{mod.name}</span>
+            {/* Module name with the app name under it, as on phones, so people learn the main brand. */}
+            <span className="leading-tight">
+              <span className="display block whitespace-nowrap text-lg">{mod.name}</span>
+              <span className="block text-xs font-semibold text-muted">{APP_NAME}</span>
+            </span>
           </Link>
-          <nav aria-label="Main" className={cx("flex flex-1 items-center gap-1", module === "pp" ? "ml-4" : "justify-center")}>
+          {/* One nav design for both modules: centred items with icons, the profile as an avatar. On small laptops and
+              tablets (768–1023 px) the items show icons only (name kept for screen readers and as a tooltip), so the
+              bar never overflows; from 1024 px the names show. */}
+          <nav aria-label="Main" className="flex flex-1 items-center justify-center gap-1">
             <div className="flex items-center gap-1 rounded-2xl p-1">
               {items.map((it) =>
-                it.icon === "user" && module === "gg" ? (
+                it.icon === "user" ? (
                   <Link
                     key={it.to}
                     to={it.to}
@@ -134,11 +144,12 @@ function DesktopBar({ module, items, active, badge }) {
                     key={it.to}
                     to={it.to}
                     aria-current={active(it.to) ? "page" : undefined}
-                    className={cx("relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-bold transition-colors duration-150", active(it.to) ? "text-on-primary" : "text-ink hover:bg-soft/60")}
+                    title={it.desk || it.label}
+                    className={cx("relative flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-xl px-3 text-base font-bold transition-colors duration-150 lg:px-4", active(it.to) ? "text-on-primary" : "text-ink hover:bg-soft/60")}
                   >
                     {active(it.to) && <NavPill group="desk" className="absolute inset-0 rounded-xl bg-primary shadow-[0_6px_16px_-8px_var(--primary)]" />}
-                    {module === "gg" && <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="relative size-5" />}
-                    <span className="relative">{it.desk || it.label}</span>
+                    <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="relative size-5" />
+                    <span className="sr-only lg:not-sr-only lg:relative">{it.desk || it.label}</span>
                     {it.icon === "bell" && <Badge n={badge} className="relative" />}
                   </Link>
                 ),
@@ -166,11 +177,11 @@ function PhoneBar({ module, title }) {
         {title ? (
           <span className="display text-lg">{title}</span>
         ) : (
-          <Link to={mod.home} className="flex items-center gap-3">
+          <Link to={mod.home} className="flex min-h-11 items-center gap-3">
             <Logo icon={mod.icon} size="sm" />
             <span className="leading-tight">
               <span className="display block text-[17px]">{mod.name}</span>
-              <span className="block text-xs font-semibold text-muted">CivicPulse</span>
+              <span className="block text-xs font-semibold text-muted">{APP_NAME}</span>
             </span>
           </Link>
         )}
@@ -180,14 +191,33 @@ function PhoneBar({ module, title }) {
   );
 }
 
+// While a text field has focus (phone keyboard open), the bar slides away so it never sits on top of the keyboard
+// or covers the field being typed in.
+const FIELD = 'input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]):not([type="button"]):not([type="submit"]), textarea, select, [contenteditable="true"]';
+function useTyping() {
+  const [typing, setTyping] = useState(false);
+  useEffect(() => {
+    const on = (e) => e.target.matches?.(FIELD) && setTyping(true);
+    const off = (e) => e.target.matches?.(FIELD) && !e.relatedTarget?.matches?.(FIELD) && setTyping(false);
+    document.addEventListener("focusin", on);
+    document.addEventListener("focusout", off);
+    return () => {
+      document.removeEventListener("focusin", on);
+      document.removeEventListener("focusout", off);
+    };
+  }, []);
+  return typing;
+}
+
 function BottomBar({ items, active, badge }) {
   const [hidden, setHidden] = useHideOnScroll();
+  const typing = useTyping();
   const { user } = useApp();
   return (
     <m.nav
       className="fixed inset-x-3 bottom-[calc(10px+env(safe-area-inset-bottom))] z-30 md:hidden"
       aria-label="Main"
-      animate={{ y: hidden ? 120 : 0 }}
+      animate={{ y: hidden || typing ? 120 : 0 }}
       transition={springSoft}
       onFocusCapture={() => setHidden(false)}
     >
@@ -205,7 +235,7 @@ function BottomBar({ items, active, badge }) {
                   <span className={cx("relative grid h-8 w-14 place-items-center rounded-full", on ? "text-ink" : "text-muted")}>
                     {on && <NavPill group="bottom" className="absolute inset-0 rounded-full bg-primary/15" />}
                     {it.icon === "user" && user?.avatar_url ? (
-                      <Avatar src={user.avatar_url} text={initials(user.display_name)} className={cx("relative size-7 text-[11px]", on && "ring-2 ring-primary ring-offset-1 ring-offset-surface")} />
+                      <Avatar src={user.avatar_url} text={initials(user.display_name)} className={cx("relative size-7 text-xs", on && "ring-2 ring-primary ring-offset-1 ring-offset-surface")} />
                     ) : (
                       <Icon name={it.icon} className="relative size-6" strokeWidth={on ? 2.3 : 1.9} />
                     )}

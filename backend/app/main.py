@@ -11,7 +11,7 @@ from app.routers import admin, auth, capture, feed, geo, health, insights, notif
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s %(message)s")
 
 app = FastAPI(
-    title="CivicPulse API",
+    title="CityPulse API",
     description="Trust-aware credibility and uncertainty for crowdsourced civic and price reports",
     version="0.3.0",
     docs_url="/api/docs" if settings.DEV_MODE else None,   # no public API docs outside development

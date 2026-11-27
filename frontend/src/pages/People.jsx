@@ -24,7 +24,7 @@ export const PRICES_INTEREST = { code: "prices", name_en: "Market prices", name_
 // ---------- header ----------
 
 // The cover is generated, not uploaded (no extra content to moderate): the module colour, a soft glow and the
-// CivicPulse pulse line. It is the same for everyone in a module, so it reads as "a CivicPulse profile".
+// CityPulse pulse line. It is the same for everyone in a module, so it reads as "a CityPulse profile".
 function Cover() {
   return (
     <div className="relative h-36 overflow-hidden rounded-[28px] bg-gradient-to-br from-primary to-[color-mix(in_srgb,var(--primary)_55%,black)] md:h-48" aria-hidden>
@@ -64,7 +64,7 @@ export function InterestChips({ codes, categories, className }) {
   );
 }
 
-// Reputation comes first after the person's details (user decision, 26 Nov): it is what CivicPulse is about.
+// Reputation comes first after the person's details (user decision, 26 Nov): it is what CityPulse is about.
 function ReputationRow({ rep, onHow }) {
   return (
     <div className="mt-4 flex items-center gap-4 rounded-3xl border border-hair bg-surface p-4 shadow-1">
@@ -76,7 +76,7 @@ function ReputationRow({ rep, onHow }) {
         </p>
         <p className="mt-1 text-[13px] leading-snug text-muted">Rises when reports end up credible and on-the-spot checks match the result.</p>
         {onHow && (
-          <button onClick={onHow} className="mt-0.5 min-h-9 text-sm font-bold text-primary underline underline-offset-4">
+          <button onClick={onHow} className="hit relative mt-0.5 min-h-9 text-sm font-bold text-primary underline underline-offset-4">
             How reputation works
           </button>
         )}
@@ -120,7 +120,7 @@ export function ProfileHeader({ person, own, categories, onEdit, onPhoto, onHowR
         {person.bio ? (
           <p className="mt-2 whitespace-pre-line text-[16.5px] leading-relaxed">{person.bio}</p>
         ) : own ? (
-          <button onClick={onEdit} className="mt-2 text-[15px] font-bold text-primary underline-offset-4 hover:underline">
+          <button onClick={onEdit} className="hit relative mt-2 text-[15px] font-bold text-primary underline-offset-4 hover:underline">
             + Add a short bio
           </button>
         ) : null}
@@ -391,7 +391,7 @@ export function EditProfile({ open, onClose, me, categories, onSaved }) {
                   onClick={() => toggle(c.code)}
                   style={catStyle(c.code === "prices" ? null : c.code)}
                   className={cx(
-                    "press inline-flex min-h-10 items-center gap-1.5 rounded-full border-[1.5px] px-3.5 text-[14px] font-bold transition-colors duration-150",
+                    "press inline-flex min-h-11 items-center gap-1.5 rounded-full border-[1.5px] px-3.5 text-[14px] font-bold transition-colors duration-150",
                     on ? "border-transparent bg-cat text-white" : "border-line bg-surface text-ink hover:bg-soft/40",
                   )}
                 >
