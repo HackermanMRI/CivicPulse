@@ -596,7 +596,7 @@ export function ReportDialog({ id, initialMode, focus, onClose, onChanged, seed,
         {loading && (
           <div className="grid gap-6 md:grid-cols-2">
             {seed?.photo_url ? (
-              <Photo src={seed.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" vtName={instant ? "report-photo" : undefined} />
+              <Photo eager src={seed.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" vtName={instant ? "report-photo" : undefined} />
             ) : (
               <Skeleton className="aspect-[4/3] w-full rounded-none" />
             )}
@@ -618,7 +618,7 @@ export function ReportDialog({ id, initialMode, focus, onClose, onChanged, seed,
         {r && (
           <>
             <div className="grid md:grid-cols-2">
-              <Photo src={r.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" placeholder="Reporter's photo" vtName={instant ? "report-photo" : undefined}>
+              <Photo eager src={r.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" placeholder="Reporter's photo" vtName={instant ? "report-photo" : undefined}>
                 <span className="num absolute bottom-4 left-4 rounded-full bg-black/70 px-3 py-1.5 text-[13px] font-bold text-white backdrop-blur-sm">Taken {fmtLongStamp(r.submitted_at)}</span>
                 {image && (
                   <span className="num absolute bottom-4 right-4 rounded-full bg-surface px-3 py-1.5 text-[13px] font-bold text-ink shadow-1">

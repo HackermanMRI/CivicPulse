@@ -1,7 +1,7 @@
 // Price Patrol (boards: Price Patrol dashboard, Report a price; W6, C6, C19, P-2): today's verified prices, history
 // and market comparison for one product, price alerts, your submissions, Explore Prices and the report form.
 import { m } from "motion/react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Camera, ensureFreshToken } from "../../components/Camera.jsx";
 import { PriceChart } from "../../components/charts.jsx";
 import { Icon } from "../../components/icons.jsx";
@@ -45,7 +45,16 @@ function variantLine(c, market) {
   return [c.variant, `per ${c.unit}`, market].filter(Boolean).join(" · ");
 }
 
-function PriceCard({ card, selected, onSelect, index = 0 }) {
+function PriceCard({ card, selected, onSelect, index = 0, selIndex = -1 }) {
+  // The selection bar travels: the old card's bar slides out toward the newly chosen card and the new card's bar
+  // slides in from the old one's side (transform only). Unchosen cards keep their bar parked out of sight with no
+  // transition, so only the two cards involved move. (It used Motion's layoutId before; see Shell.jsx NavPill.)
+  const wasSelected = useRef(selected);
+  const moving = selected !== wasSelected.current;
+  useEffect(() => {
+    wasSelected.current = selected;
+  });
+  const barX = selected ? "0%" : index < selIndex ? "101%" : "-101%";
   const verified = card.today.status === "Verified" || Boolean(card.latest);
   const insufficient = !card.latest;
   return (
@@ -65,7 +74,13 @@ function PriceCard({ card, selected, onSelect, index = 0 }) {
             : "border-hair shadow-1 hover:border-primary/60",
       )}
     >
-      {selected && !insufficient && <m.span layoutId="price-sel" className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-primary to-glow" transition={spring} aria-hidden />}
+      {!insufficient && selIndex >= 0 && (
+        <span
+          className="absolute inset-x-0 top-0 h-[3px] bg-gradient-to-r from-primary to-glow"
+          style={{ transform: `translateX(${barX})`, transition: moving ? "transform 340ms cubic-bezier(0.2,0,0,1)" : "none" }}
+          aria-hidden
+        />
+      )}
       <span className="flex items-start justify-between gap-2">
         <span className="display text-[17px]">{card.commodity.name_en}</span>
         {verified && !insufficient ? (
@@ -227,15 +242,15 @@ function countsLabel(p, flags) {
 }
 
 export function PriceDashboard() {
-  const markets = useData(() => api("/api/markets"), []);
+  const markets = useData(() => api("/api/markets"), [], "markets");
   const [market, setMarket] = useState("");
   const [q, setQ] = useState("");
   const [sel, setSel] = useState(null);
   const [days, setDays] = useState(30);
   const [watch, setWatch] = useState(false);
-  const dash = useData(() => api("/api/prices/dashboard", { query: { market_id: market || undefined } }), [market]);
-  const alerts = useData(() => api("/api/prices/alerts"), []);
-  const mine = useData(() => api("/api/me/reports", { query: { type: "price", limit: 5 } }), []);
+  const dash = useData(() => api("/api/prices/dashboard", { query: { market_id: market || undefined } }), [market], `price-dash:${market || "all"}`);
+  const alerts = useData(() => api("/api/prices/alerts"), [], "price-alerts");
+  const mine = useData(() => api("/api/me/reports", { query: { type: "price", limit: 5 } }), [], "my-reports:price:5");
 
   const cards = useMemo(() => {
     const needle = q.trim().toLowerCase();
@@ -285,7 +300,7 @@ export function PriceDashboard() {
       {cards.length > 0 && (
         <div className="-mx-4 mt-3 flex snap-x gap-3 overflow-x-auto px-4 pb-2 lg:mx-0 lg:grid lg:grid-cols-5 lg:overflow-visible lg:px-0">
           {cards.map((c) => (
-            <PriceCard key={c.commodity.id} index={cards.indexOf(c)} card={c} selected={selected?.commodity.id === c.commodity.id} onSelect={() => setSel(c.commodity.id)} />
+            <PriceCard key={c.commodity.id} index={cards.indexOf(c)} selIndex={selected ? cards.indexOf(selected) : -1} card={c} selected={selected?.commodity.id === c.commodity.id} onSelect={() => setSel(c.commodity.id)} />
           ))}
         </div>
       )}
@@ -368,8 +383,8 @@ export function PriceDashboard() {
 
 export function Explore() {
   const { query } = useRoute();
-  const markets = useData(() => api("/api/markets"), []);
-  const coms = useData(() => api("/api/commodities"), []);
+  const markets = useData(() => api("/api/markets"), [], "markets");
+  const coms = useData(() => api("/api/commodities"), [], "commodities");
   const [market, setMarket] = useState(query.get("market") || "");
   const [com, setCom] = useState(query.get("commodity") || "");
   const [days, setDays] = useState(30);
@@ -479,8 +494,8 @@ function PhotoTile({ icon, title, sub, shot, onTake, onClear }) {
 export function PriceReport() {
   const { user } = useApp();
   const now = useNow();
-  const markets = useData(() => api("/api/markets"), []);
-  const coms = useData(() => api("/api/commodities"), []);
+  const markets = useData(() => api("/api/markets"), [], "markets");
+  const coms = useData(() => api("/api/commodities"), [], "commodities");
   const [name, setName] = useState("");
   const [com, setCom] = useState("");
   const [market, setMarket] = useState("");

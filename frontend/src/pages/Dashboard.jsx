@@ -76,14 +76,14 @@ export default function Dashboard() {
   const common = { ...windowQuery, category: f.category || undefined, ward_id: f.ward || undefined };
   const results = { status: f.status, show_resolved: f.showResolved };
 
-  const cats = useData(() => api("/api/categories"), []);
-  const wards = useData(() => api("/api/wards"), []);
+  const cats = useData(() => api("/api/categories"), [], "categories");
+  const wards = useData(() => api("/api/wards"), [], "wards");
   const key = JSON.stringify(f);
-  const summary = useData(() => api("/api/insights/summary", { query: { ...common, ...results } }), [key, live?.id]);
-  const points = useData(() => api("/api/insights/map", { query: { ...common, ...results } }), [key, live?.id]);
-  const grid = useData(() => (mode === "3d" ? api("/api/insights/grid", { query: { ...common, show_resolved: f.showResolved } }) : Promise.resolve(null)), [key, mode]);
-  const hotspots = useData(() => api("/api/insights/hotspots"), []);
-  const alerts = useData(() => api("/api/insights/alerts", { query: { days: 14 } }), []);
+  const summary = useData(() => api("/api/insights/summary", { query: { ...common, ...results } }), [key, live?.id], `dash-summary:${key}`);
+  const points = useData(() => api("/api/insights/map", { query: { ...common, ...results } }), [key, live?.id], `dash-map:${key}`);
+  const grid = useData(() => (mode === "3d" ? api("/api/insights/grid", { query: { ...common, show_resolved: f.showResolved } }) : Promise.resolve(null)), [key, mode], `dash-grid:${mode}:${key}`);
+  const hotspots = useData(() => api("/api/insights/hotspots"), [], "hotspots");
+  const alerts = useData(() => api("/api/insights/alerts", { query: { days: 14 } }), [], "insight-alerts:14");
 
   // Live ripple + tag for a new report in the user's areas (B6).
   useEffect(() => {

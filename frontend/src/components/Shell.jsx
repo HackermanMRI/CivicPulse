@@ -6,7 +6,7 @@
 import { m } from "motion/react";
 import { useEffect, useRef, useState } from "react";
 import { Link, navigate, useRoute } from "../lib/router.jsx";
-import { spring, springSoft } from "../lib/motion.js";
+import { spring, springSoft, useGlidePill } from "../lib/motion.js";
 import { useApp } from "../lib/store.jsx";
 import { Icon, Logo } from "./icons.jsx";
 import { Avatar, ModuleProvider, OfflineBanner, Toasts, cx } from "./ui.jsx";
@@ -33,6 +33,14 @@ function navItems(module) {
     { to: "/gg/alerts", label: "Alerts", icon: "bell" },
     { to: "/gg/profile", label: "Profile", icon: "user" },
   ];
+}
+
+// The active-item pill glides from the previous tab to the new one (useGlidePill: measured after the new page has
+// painted, animated on the compositor). It used Motion's layoutId before, which measured the whole new page during
+// the switch (~190 ms on a 4x-slowed CPU). First visit: a short pop-in.
+function NavPill({ group, className }) {
+  const [ref, waiting] = useGlidePill(group);
+  return <span ref={ref} className={cx(className, !waiting && "cp-pill-in")} style={waiting ? { opacity: 0 } : undefined} aria-hidden />;
 }
 
 // The pill at the top right: always in the OTHER module's colour, so it reads as a door to that area.
@@ -128,7 +136,7 @@ function DesktopBar({ module, items, active, badge }) {
                     aria-current={active(it.to) ? "page" : undefined}
                     className={cx("relative flex min-h-11 items-center gap-2 rounded-xl px-4 text-base font-bold transition-colors duration-150", active(it.to) ? "text-on-primary" : "text-ink hover:bg-soft/60")}
                   >
-                    {active(it.to) && <m.span layoutId="desk-pill" className="absolute inset-0 rounded-xl bg-primary shadow-[0_6px_16px_-8px_var(--primary)]" transition={spring} />}
+                    {active(it.to) && <NavPill group="desk" className="absolute inset-0 rounded-xl bg-primary shadow-[0_6px_16px_-8px_var(--primary)]" />}
                     {module === "gg" && <Icon name={it.icon === "plus" ? "plusCircle" : it.icon} className="relative size-5" />}
                     <span className="relative">{it.desk || it.label}</span>
                     {it.icon === "bell" && <Badge n={badge} className="relative" />}
@@ -195,7 +203,7 @@ function BottomBar({ items, active, badge }) {
                   </span>
                 ) : (
                   <span className={cx("relative grid h-8 w-14 place-items-center rounded-full", on ? "text-ink" : "text-muted")}>
-                    {on && <m.span layoutId="nav-pill" className="absolute inset-0 rounded-full bg-primary/15" transition={spring} />}
+                    {on && <NavPill group="bottom" className="absolute inset-0 rounded-full bg-primary/15" />}
                     {it.icon === "user" && user?.avatar_url ? (
                       <Avatar src={user.avatar_url} text={initials(user.display_name)} className={cx("relative size-7 text-[11px]", on && "ring-2 ring-primary ring-offset-1 ring-offset-surface")} />
                     ) : (
@@ -227,7 +235,7 @@ export function Shell({ module, children, wide, title, bare }) {
         <OfflineBanner />
         <DesktopBar module={module} items={items} active={active} badge={badge} />
         {!bare && <PhoneBar module={module} title={title} />}
-        <main className={cx("relative mx-auto px-4 pb-36 md:px-5 md:pb-14 md:pt-6", bare ? "pt-4" : "pt-3", wide ? "max-w-[1360px]" : "max-w-2xl")}>{children}</main>
+        <main className={cx("cp-page-in relative mx-auto px-4 pb-36 md:px-5 md:pb-14 md:pt-6", bare ? "pt-4" : "pt-3", wide ? "max-w-[1360px]" : "max-w-2xl")}>{children}</main>
         <BottomBar items={items} active={active} badge={badge} />
         <Toasts />
       </div>
@@ -240,7 +248,7 @@ export function Plain({ children, module = "shell", className }) {
     <ModuleProvider value={module}>
       <div data-module={module} className={cx("relative min-h-dvh bg-bg text-ink", className)}>
         <OfflineBanner />
-        <main className="relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">{children}</main>
+        <main className="cp-page-in relative mx-auto flex min-h-dvh max-w-md flex-col px-5 py-6">{children}</main>
         <Toasts />
       </div>
     </ModuleProvider>

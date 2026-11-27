@@ -595,9 +595,9 @@ export function PersonPage() {
   const { path } = useRoute();
   const id = path.split("/")[3];
   const module = moduleFromPath(path);
-  const person = useData(() => api(`/api/people/${id}`), [id]);
-  const cats = useData(() => api("/api/categories"), []);
-  const reports = useData(() => api(`/api/people/${id}/reports`), [id]);
+  const person = useData(() => api(`/api/people/${id}`), [id], `person:${id}`);
+  const cats = useData(() => api("/api/categories"), [], "categories");
+  const reports = useData(() => api(`/api/people/${id}/reports`), [id], `person-reports:${id}`);
   const p = person.data;
   return (
     <Shell module={module} title="Profile">

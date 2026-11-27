@@ -319,6 +319,35 @@
     opacity: 0.35;
   }
 
+  /* Page change: the new page fades and rises in (compositor only; never delays rendering). */
+  .cp-page-in {
+    animation: cp-page-in 200ms var(--ease-enter) both;
+  }
+  @keyframes cp-page-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+  }
+
+  /* Active nav/tab pill: a short pop-in on the compositor (no layout measuring). */
+  .cp-pill-in {
+    animation: cp-pill-in 220ms var(--ease-enter) both;
+  }
+  @keyframes cp-pill-in {
+    from {
+      opacity: 0;
+      transform: scale(0.82);
+    }
+  }
+
+  /* Long lists: cards outside the screen skip style, layout and paint until they come near (content-visibility).
+     The intrinsic size keeps the scrollbar honest while they're skipped. */
+  .cp-lazy-card {
+    content-visibility: auto;
+    contain-intrinsic-size: auto 640px;
+  }
+
   /* Pressable surfaces sink a little under the finger (transform only). */
   .press {
     transition: transform 160ms var(--ease-enter);

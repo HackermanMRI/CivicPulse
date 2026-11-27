@@ -34,13 +34,17 @@ def _market(db: Session, market_id: int | None) -> Market:
     return m
 
 
+def _reference_out(ref: ReferencePrice | None) -> dict | None:
+    return None if ref is None else {"source": ref.source, "date": ref.date.isoformat(), "min_bdt": float(ref.min_bdt),
+                                     "max_bdt": float(ref.max_bdt), "note": "Information only, never evidence (Q26)"}
+
+
 def _reference(db: Session, commodity_id: int, market_id: int, day: date) -> dict | None:
     ref = (db.query(ReferencePrice).filter(ReferencePrice.commodity_id == commodity_id, ReferencePrice.date <= day,
                                           ReferencePrice.date >= day - timedelta(days=7),
                                           (ReferencePrice.market_id == market_id) | ReferencePrice.market_id.is_(None))
            .order_by(ReferencePrice.date.desc()).first())
-    return None if ref is None else {"source": ref.source, "date": ref.date.isoformat(), "min_bdt": float(ref.min_bdt),
-                                     "max_bdt": float(ref.max_bdt), "note": "Information only, never evidence (Q26)"}
+    return _reference_out(ref)
 
 
 def _change(series: dict[date, float], today: date) -> dict | None:
@@ -56,15 +60,44 @@ def _market_ref(m: Market) -> dict:
     return {"id": m.id, "name_en": m.name_en, "name_bn": m.name_bn}
 
 
-def _card(db: Session, c: Commodity, m: Market, today: date, watched: set[int]) -> dict:
-    series = verified_series(db, c.id, m.id, today - timedelta(days=13))
-    cells = {v.date: v for v in db.query(VerifiedPrice).filter(VerifiedPrice.commodity_id == c.id, VerifiedPrice.market_id == m.id,
-                                                              VerifiedPrice.date >= today - timedelta(days=13))}
+class _CardData:
+    """Everything the dashboard cards need, loaded in 3 queries for all products × markets at once. It used to be
+    4 queries per card (112 queries for 7 products × 4 markets); now it is the same 3 queries for any number."""
+
+    def __init__(self, db: Session, commodity_ids: list[int], market_ids: list[int], today: date):
+        since = today - timedelta(days=13)
+        self.cells: dict[tuple[int, int], dict[date, VerifiedPrice]] = {}
+        for v in db.query(VerifiedPrice).filter(VerifiedPrice.commodity_id.in_(commodity_ids),
+                                                VerifiedPrice.market_id.in_(market_ids), VerifiedPrice.date >= since):
+            self.cells.setdefault((v.commodity_id, v.market_id), {})[v.date] = v
+        self.raw_today = dict(((c, m), n) for c, m, n in
+                              db.query(PriceDetail.commodity_id, PriceDetail.market_id, func.count(PriceDetail.report_id))
+                              .join(Report, Report.id == PriceDetail.report_id)
+                              .filter(PriceDetail.commodity_id.in_(commodity_ids), PriceDetail.market_id.in_(market_ids),
+                                      PriceDetail.observed_date == today, Report.visibility == "visible")
+                              .group_by(PriceDetail.commodity_id, PriceDetail.market_id).all())
+        # Newest first; on the same day a market's own reference wins over the city-wide one (market_id NULL).
+        self.refs: dict[int, list[ReferencePrice]] = {}
+        for ref in (db.query(ReferencePrice).filter(ReferencePrice.commodity_id.in_(commodity_ids), ReferencePrice.date <= today,
+                                                    ReferencePrice.date >= today - timedelta(days=7))
+                    .order_by(ReferencePrice.date.desc(), ReferencePrice.market_id.is_(None))):
+            self.refs.setdefault(ref.commodity_id, []).append(ref)
+
+    def series(self, c: int, m: int) -> dict[date, float]:
+        """Same as analytics.verified_series over the loaded window: verified days with a price."""
+        return {d: float(v.verified_price) for d, v in self.cells.get((c, m), {}).items()
+                if v.status == "Verified" and v.verified_price is not None}
+
+    def reference(self, c: int, m: int) -> dict | None:
+        return _reference_out(next((r for r in self.refs.get(c, []) if r.market_id in (m, None)), None))
+
+
+def _card(data: _CardData, c: Commodity, m: Market, today: date, watched: set[int]) -> dict:
+    series = data.series(c.id, m.id)
+    cells = data.cells.get((c.id, m.id), {})
     cell = cells.get(today)
     latest_day = max(series) if series else None
-    raw_today = (db.query(func.count(PriceDetail.report_id)).join(Report, Report.id == PriceDetail.report_id)
-                 .filter(PriceDetail.commodity_id == c.id, PriceDetail.market_id == m.id, PriceDetail.observed_date == today,
-                         Report.visibility == "visible").scalar())
+    raw_today = data.raw_today.get((c.id, m.id), 0)
     return {
         "commodity": _commodity(c), "market": _market_ref(m), "watched": c.id in watched,
         "latest": {"date": latest_day.isoformat(), "verified_price": series[latest_day],
@@ -74,7 +107,7 @@ def _card(db: Session, c: Commodity, m: Market, today: date, watched: set[int]) 
         if cell else {"status": "Insufficient Evidence", "report_count": 0, "all_reports": raw_today, "verified_price": None},
         "change_7d": _change(series, today),
         "sparkline": [{"date": d.isoformat(), "price": p} for d, p in sorted(series.items())],
-        "reference": _reference(db, c.id, m.id, today),
+        "reference": data.reference(c.id, m.id),
     }
 
 
@@ -96,9 +129,9 @@ def dashboard(market_id: int | None = None, user: User = Depends(current_user), 
         markets = db.query(Market).order_by(Market.id).all()
         if not markets:
             raise HTTPException(status_code=404, detail="No markets yet")
-    cards = []
-    for c in db.query(Commodity).filter_by(active=True).order_by(Commodity.name_en, Commodity.variant).all():
-        cards.append(max((_card(db, c, m, today, watched) for m in markets), key=_rank))
+    commodities = db.query(Commodity).filter_by(active=True).order_by(Commodity.name_en, Commodity.variant).all()
+    data = _CardData(db, [c.id for c in commodities], [m.id for m in markets], today)
+    cards = [max((_card(data, c, m, today, watched) for m in markets), key=_rank) for c in commodities]
     return {"market": _market_ref(markets[0]) if market_id is not None else None, "date": today.isoformat(), "cards": cards}
 
 
@@ -155,10 +188,18 @@ def alerts(user: User = Depends(current_user), db: Session = Depends(get_db)):
     """P-2: products whose verified price moved ±10% over 7 days. Watched products first (A2)."""
     today = dhaka_date()
     watched = {c for c, in db.query(PriceWatch.commodity_id).filter_by(user_id=user.id).all()}
+    since = today - timedelta(days=7)
+    series: dict[tuple[int, int], dict[date, float]] = {}  # one query for every product × market (was one per pair)
+    for c_id, m_id, d, p in db.query(VerifiedPrice.commodity_id, VerifiedPrice.market_id, VerifiedPrice.date,
+                                     VerifiedPrice.verified_price).filter(VerifiedPrice.status == "Verified",
+                                                                           VerifiedPrice.date >= since):
+        if p is not None:
+            series.setdefault((c_id, m_id), {})[d] = float(p)
     out = []
+    markets = db.query(Market).all()
     for c in db.query(Commodity).filter_by(active=True).all():
-        for m in db.query(Market).all():
-            ch = _change(verified_series(db, c.id, m.id, today - timedelta(days=7)), today)
+        for m in markets:
+            ch = _change(series.get((c.id, m.id), {}), today)
             if ch and ch["alert"]:
                 out.append({"commodity": _commodity(c), "market": {"id": m.id, "name_en": m.name_en},
                             "change_7d": ch, "watched": c.id in watched})

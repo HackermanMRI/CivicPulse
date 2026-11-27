@@ -12,22 +12,45 @@ import { useApp } from "./lib/store.jsx";
 const loadAccount = () => import("./pages/Account.jsx");
 const loadAuth = () => import("./pages/auth/Auth.jsx");
 const loadPrices = () => import("./pages/prices/Prices.jsx");
-const named = (loader, name) => lazy(() => loader().then((mod) => ({ default: mod[name] })));
+const loadDashboard = () => import("./pages/Dashboard.jsx");
+const loadPeople = () => import("./pages/People.jsx");
+const loadAdmin = () => import("./pages/admin/Admin.jsx");
 
-const Dashboard = lazy(() => import("./pages/Dashboard.jsx"));
-const Admin = lazy(() => import("./pages/admin/Admin.jsx"));
-const Alerts = named(loadAccount, "Alerts");
-const EditAreas = named(loadAccount, "EditAreas");
-const MyReports = named(loadAccount, "MyReports");
-const Profile = named(loadAccount, "Profile");
-const Login = named(loadAuth, "Login");
-const Signup = named(loadAuth, "Signup");
-const Forgot = named(loadAuth, "Forgot");
-const ModulePicker = named(loadAuth, "ModulePicker");
-const PriceDashboard = named(loadPrices, "PriceDashboard");
-const Explore = named(loadPrices, "Explore");
-const PriceReport = named(loadPrices, "PriceReport");
-const PersonPage = lazy(() => import("./pages/People.jsx").then((mod) => ({ default: mod.PersonPage })));
+// A page from a lazy chunk. Once its chunk has arrived (the idle prefetch below), the page renders straight away
+// like normal code. Plain React.lazy can't do that: it always suspends on its first render, even when the chunk is
+// already downloaded, and React then holds the fallback on screen for at least 300 ms (its Suspense reveal throttle).
+// That was the ~300 ms "dead" pause measured on every first visit to a tab.
+const loaded = new Map(); // loader -> module
+function load(loader) {
+  return loader().then((mod) => {
+    loaded.set(loader, mod);
+    return mod;
+  });
+}
+function page(loader, name = "default") {
+  const Lazy = lazy(() => load(loader).then((mod) => ({ default: mod[name] })));
+  function Page(props) {
+    const Ready = loaded.get(loader)?.[name];
+    return Ready ? <Ready {...props} /> : <Lazy {...props} />;
+  }
+  Page.displayName = `Page(${name})`;
+  return Page;
+}
+
+const Dashboard = page(loadDashboard);
+const Admin = page(loadAdmin);
+const Alerts = page(loadAccount, "Alerts");
+const EditAreas = page(loadAccount, "EditAreas");
+const MyReports = page(loadAccount, "MyReports");
+const Profile = page(loadAccount, "Profile");
+const Login = page(loadAuth, "Login");
+const Signup = page(loadAuth, "Signup");
+const Forgot = page(loadAuth, "Forgot");
+const ModulePicker = page(loadAuth, "ModulePicker");
+const PriceDashboard = page(loadPrices, "PriceDashboard");
+const Explore = page(loadPrices, "Explore");
+const PriceReport = page(loadPrices, "PriceReport");
+const PersonPage = page(loadPeople, "PersonPage");
 const PERSON = /^\/(gg|pp)\/people\/[0-9a-f-]{36}$/;
 
 const OPEN = { "/login": Login, "/signup": Signup, "/forgot": Forgot };
@@ -57,8 +80,9 @@ function usePrefetch(user) {
   useEffect(() => {
     const idle = window.requestIdleCallback || ((fn) => setTimeout(fn, 1200));
     const id = idle(() => {
-      const loaders = user ? [loadAccount, loadPrices] : [loadAuth];
-      loaders.forEach((l) => l().catch(() => {}));
+      // Small page chunks (16–24 KB each). The map library (MapView, ~1 MB) is not here: it loads only when the map opens.
+      const loaders = !user ? [loadAuth] : user.role === "admin" ? [loadAdmin] : [loadAccount, loadPrices, loadDashboard, loadPeople, loadAuth];
+      loaders.forEach((l) => load(l).catch(() => {}));
     });
     return () => (window.cancelIdleCallback || clearTimeout)(id);
   }, [user]);
