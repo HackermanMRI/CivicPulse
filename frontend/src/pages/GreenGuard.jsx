@@ -48,7 +48,7 @@ export function CardList({ items, setItems, onPin }) {
   }, []);
   return (
     <>
-      <div className="grid gap-5">
+      <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
         {items.map((r, i) =>
           // The first 6 cards of each page stagger in (40 ms apart, motion tokens), as before. The rest don't animate on mount; they
           // rise in as they scroll into view (CSS scroll-driven, where supported) and, while off screen, skip
@@ -334,7 +334,7 @@ export function Feed() {
         <PinnedBar count={pinnedCount} />
         {state.error && items.length === 0 && <ErrorState error={state.error} onRetry={() => load(true)} title="Couldn't load the feed" note="Your pinned reports are still saved." />}
         {!state.error && state.loading && items.length === 0 && (
-          <div className="grid gap-5">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-5">
             <CardSkeleton />
             <CardSkeleton />
           </div>
@@ -534,7 +534,7 @@ export function ReportForm() {
       {step === 1 && (
         <div className="mt-5">
           <h2 className="display text-xl">What kind of problem is it?</h2>
-          <div className="mt-4 grid gap-3 sm:grid-cols-2">
+          <div className="mt-4 grid grid-cols-[minmax(0,1fr)] gap-3 sm:grid-cols-2">
             {cats.loading && Array.from({ length: 6 }, (_, i) => <div key={i} className="cp-skeleton h-[72px] rounded-2xl" />)}
             {(cats.data || []).map((c) => (
               <button

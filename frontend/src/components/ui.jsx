@@ -89,7 +89,7 @@ export function FlagChip({ flag, className }) {
 }
 
 export function DemoBadge({ className, explain = false }) {
-  const badge = "inline-flex shrink-0 rounded-md bg-err px-1.5 py-px text-[11px] font-bold tracking-wide text-white";
+  const badge = "inline-flex shrink-0 rounded-md bg-err px-1.5 py-px text-xs font-bold tracking-wide text-white";
   if (!explain)
     return (
       <span title="Synthetic DEMO data. Never used for research results." className={cx(badge, className)}>
@@ -100,7 +100,7 @@ export function DemoBadge({ className, explain = false }) {
     <Popover
       label="What DEMO means"
       trigger={
-        <button type="button" className={cx(badge, "cursor-help", className)} aria-label="DEMO data: what does this mean?">
+        <button type="button" className={cx(badge, "hit relative cursor-help", className)} aria-label="DEMO data: what does this mean?">
           DEMO
         </button>
       }
@@ -515,7 +515,7 @@ export function Segmented({ options, value, onChange, label, className, dark }) 
             aria-checked={on}
             onClick={() => onChange(o.value)}
             className={cx(
-              "relative min-h-10 rounded-lg px-3.5 text-[15px] font-bold transition-colors duration-200",
+              "relative min-h-11 rounded-lg px-3.5 text-[15px] font-bold transition-colors duration-200",
               on ? cx(dark ? "text-on-inverse" : "text-on-primary", !pos && fill) : "text-ink hover:bg-soft/50",
             )}
           >
@@ -677,7 +677,16 @@ export function Avatar({ text, className, icon, src, alt = "" }) {
   }, [src]);
   return (
     <span
-      className={cx("relative grid size-10 shrink-0 place-items-center overflow-hidden rounded-full text-base font-bold", /\bbg-/.test(className || "") ? "" : "bg-soft text-primary", className)}
+      // Defaults apply only when the caller doesn't set its own size, text size or colours. Two Tailwind sizes on one
+      // element don't "override" each other: whichever comes later in the CSS wins (size-10 beat the bottom bar's
+      // size-7, so the avatar overflowed its tab and covered the "Profile" label).
+      className={cx(
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-full font-bold",
+        !/(^|\s)size-/.test(className || "") && "size-10",
+        !/(^|\s)text-(\[\d|xs|sm|base|lg|xl)/.test(className || "") && "text-base",
+        /(^|\s)bg-/.test(className || "") ? "" : "bg-soft text-primary",
+        className,
+      )}
       aria-hidden={alt ? undefined : true}
       role={alt ? "img" : undefined}
       aria-label={alt || undefined}

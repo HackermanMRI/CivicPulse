@@ -3,6 +3,17 @@
 import { Icon } from "./icons.jsx";
 import { Tip, cx } from "./ui.jsx";
 
+// Heat colours, like a traffic map: quiet areas stay a faint green, busier ones glow yellow and amber, and the
+// worst burn red. Shared with the legend (Dashboard.jsx) from here, so the dashboard chunk
+// doesn't pull in the map library.
+export const HEAT_STOPS = [
+  [0, "rgba(99,153,34,0)"],
+  [0.12, "rgba(151,196,89,0.38)"],
+  [0.35, "rgba(239,201,39,0.58)"],
+  [0.55, "rgba(239,159,39,0.74)"],
+  [0.78, "rgba(226,75,74,0.86)"],
+  [1, "rgba(163,45,45,0.95)"],
+];
 export const COLUMN_STEPS = [
   [1, "#bee1e1"],
   [3, "#86c8c8"],

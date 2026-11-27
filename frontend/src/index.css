@@ -674,6 +674,97 @@
     white-space: nowrap;
     box-shadow: 0 1px 3px rgb(28 61 61 / 0.15);
   }
+  /* Bigger finger target without changing the look: an invisible area of at least 44 × 44 px centred on the
+     element (WCAG 2.5.5 / Apple HIG). The element needs a position (relative or absolute). */
+  .hit::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: max(100%, 44px);
+    height: max(100%, 44px);
+    transform: translate(-50%, -50%);
+    z-index: 1; /* above neighbouring text and decorative layers, which would otherwise take the tap */
+  }
+
+  /* Range sliders: a 44 px tall touch strip around the thin track. */
+  input[type="range"] {
+    min-height: 44px;
+  }
+
+  /* Map legend panel opening above its chip. */
+  .cp-legend-in {
+    transform-origin: bottom left;
+    animation: cp-legend-in 180ms var(--ease-enter) both;
+  }
+  @keyframes cp-legend-in {
+    from {
+      opacity: 0;
+      transform: translateY(6px) scale(0.97);
+    }
+  }
+
+  /* Number badge on the busiest squares of the heat map. MapLibre moves the marker with `transform`, so the pulse
+     lives on a pseudo-element (transform + opacity only, compositor). */
+  .cp-heat-badge {
+    position: relative;
+    display: grid;
+    place-items: center;
+    min-width: 34px;
+    height: 34px;
+    padding: 0 8px;
+    border-radius: 9999px;
+    background: #a32d2d;
+    color: #fff;
+    font: 800 15px/1 "Anek Bangla", system-ui, sans-serif;
+    border: 2.5px solid #fff;
+    box-shadow: 0 4px 12px rgb(163 45 45 / 0.35);
+    cursor: pointer;
+  }
+  .cp-heat-badge::after {
+    content: "";
+    position: absolute;
+    inset: -3px;
+    border-radius: inherit;
+    border: 2px solid #e24b4a;
+    opacity: 0;
+    pointer-events: none;
+  }
+  .cp-heat-badge::before {
+    content: "";
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 48px;
+    height: 48px;
+    transform: translate(-50%, -50%);
+  }
+  .cp-heat-badge-top {
+    min-width: 40px;
+    height: 40px;
+    font-size: 17px;
+  }
+  .cp-heat-badge-top::after {
+    animation: cp-heat-pulse 1800ms var(--ease-enter) infinite;
+  }
+  .cp-heat-badge:focus-visible {
+    outline: 2px solid #a32d2d;
+    outline-offset: 4px;
+  }
+  @keyframes cp-heat-pulse {
+    from {
+      transform: scale(1);
+      opacity: 0.7;
+    }
+    to {
+      transform: scale(1.9);
+      opacity: 0;
+    }
+  }
+  [data-theme="dark"] .cp-heat-badge {
+    border-color: #151b22;
+  }
+
   /* Live ripple for a new report in your areas (B6). */
   @keyframes cp-ripple {
     from {

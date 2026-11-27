@@ -61,10 +61,11 @@ function ReporterRow({ r, fresh, right }) {
         )}
       </span>
       <div className="min-w-0 flex-1">
-        <p className="flex items-center gap-2 truncate text-[16.5px] font-bold leading-6">
+        {/* No overflow clipping on this line, so the name's 44 px tap area (.hit) isn't cut off; the name itself truncates. */}
+        <p className="flex min-w-0 items-center gap-2 text-[16.5px] font-bold leading-6">
           {person?.id ? (
-            <button onClick={() => navigate(profilePath(person.id))} className="truncate text-left underline-offset-4 hover:underline">
-              {name}
+            <button onClick={() => navigate(profilePath(person.id))} className="hit relative min-w-0 text-left underline-offset-4 hover:underline">
+              <span className="block truncate">{name}</span>
             </button>
           ) : (
             <span className="truncate">{name}</span>
@@ -86,7 +87,7 @@ function Reputation({ r }) {
   return (
     <m.span className="shrink-0 text-right leading-tight" initial={{ opacity: 0, x: 8 }} animate={{ opacity: 1, x: 0 }} transition={enter()}>
       <span className="num block text-[22px] font-extrabold text-st-high">{rep ?? "—"}</span>
-      <span className="block text-[11.5px] text-muted">Reputation</span>
+      <span className="block text-[12.5px] text-muted">Reputation</span>
     </m.span>
   );
 }
@@ -99,7 +100,7 @@ function CategoryChip({ category }) {
       </span>
       <span className="leading-none">
         <span className="display block text-[15.5px]">{category?.name_en}</span>
-        <span className="mt-0.5 block text-[11.5px] text-white/90" lang="bn">
+        <span className="mt-0.5 block text-[13px] text-white/90" lang="bn">
           {category?.name_bn}
         </span>
       </span>
@@ -148,7 +149,7 @@ function Results({ r, onWhy }) {
           <p className="num mt-1.5 text-[13.5px] leading-snug text-muted">
             Credibility {res.credibility_display ?? "—"} · Uncertainty {res.uncertainty_display ?? "—"}
           </p>
-          <button onClick={onWhy} className="mt-0.5 min-h-8 text-[13.5px] font-bold text-primary underline-offset-4 hover:underline">
+          <button onClick={onWhy} className="hit relative mt-0.5 min-h-8 text-[13.5px] font-bold text-primary underline-offset-4 hover:underline">
             Why this score?
           </button>
         </div>
@@ -178,7 +179,7 @@ function VoteTiles({ votes }) {
           animate={{ opacity: 1, y: 0 }}
           transition={{ ...spring, delay: REVEAL.details + i * REVEAL.step }}
         >
-          <p className="text-[11.5px] font-semibold text-muted">{label}</p>
+          <p className="text-[12.5px] font-semibold text-muted">{label}</p>
           {mode === "total" ? (
             <p className="num text-[17px] font-extrabold">{votes.total}</p>
           ) : (
@@ -594,7 +595,7 @@ export function ReportDialog({ id, initialMode, focus, onClose, onChanged, seed,
     <Dialog open={Boolean(id)} onClose={onClose} title={r ? `${r.category?.name_en || "Price"} report` : "Report"} size="xl" bare instant={instant}>
       <div className="relative flex max-h-[inherit] flex-col overflow-y-auto overscroll-contain">
         {loading && (
-          <div className="grid gap-6 md:grid-cols-2">
+          <div className="grid grid-cols-[minmax(0,1fr)] gap-6 md:grid-cols-2">
             {seed?.photo_url ? (
               <Photo eager src={seed.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" vtName={instant ? "report-photo" : undefined} />
             ) : (
@@ -617,7 +618,7 @@ export function ReportDialog({ id, initialMode, focus, onClose, onChanged, seed,
         )}
         {r && (
           <>
-            <div className="grid md:grid-cols-2">
+            <div className="grid grid-cols-[minmax(0,1fr)] md:grid-cols-2">
               <Photo eager src={r.photo_url} alt="Report photo" className="aspect-[4/3] w-full md:aspect-auto md:min-h-[560px]" placeholder="Reporter's photo" vtName={instant ? "report-photo" : undefined}>
                 <span className="num absolute bottom-4 left-4 rounded-full bg-black/70 px-3 py-1.5 text-[13px] font-bold text-white backdrop-blur-sm">Taken {fmtLongStamp(r.submitted_at)}</span>
                 {image && (

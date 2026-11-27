@@ -176,7 +176,7 @@ function FlowHeader({ onBack }) {
       )}
       <span className="flex items-center gap-2.5">
         <Logo size="sm" />
-        <span className="display text-[17px]">CivicPulse</span>
+        <span className="display text-[17px]">CityPulse</span>
       </span>
     </div>
   );
@@ -247,7 +247,7 @@ export function Login() {
             <Logo size="lg" className="shadow-[0_18px_40px_-14px_var(--primary)]" />
           </m.span>
           <m.h1 className="wide mt-5 text-[36px] leading-10" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ ...enter(0.32), delay: 0.12 }}>
-            CivicPulse
+            CityPulse
           </m.h1>
           <m.p className="mt-3 text-[17px] leading-relaxed text-primary" initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ ...enter(0.32), delay: 0.22 }}>
             Report civic problems and market prices. See what the evidence says.
@@ -509,7 +509,7 @@ export function Signup() {
             if (allConsents) setStep(5);
           }}
         >
-          <StepTitle step={4} total={TOTAL} what="permissions" title="What CivicPulse needs">
+          <StepTitle step={4} total={TOTAL} what="permissions" title="What CityPulse needs">
             You can read and change these later in your profile.
           </StepTitle>
           <div className="mt-6 space-y-3">
@@ -663,11 +663,11 @@ export function ModulePicker() {
     <Plain>
       <div className="mt-4 flex items-center gap-3">
         <Logo />
-        <span className="display text-lg">CivicPulse</span>
+        <span className="display text-lg">CityPulse</span>
       </div>
       <h1 className="display mt-8 text-[28px] leading-[34px]">Where do you want to start?</h1>
       <p className="mt-2 text-[15px] leading-relaxed text-primary">We will open this one every time you log in. You can switch any time with the button at the top right.</p>
-      <div className="mt-6 grid gap-5">
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-5">
         {cards.map(([mod, value, icon, title, text, cta]) => (
           <m.button
             key={mod}

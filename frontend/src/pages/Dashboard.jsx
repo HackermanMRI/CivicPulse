@@ -1,9 +1,9 @@
 // Green Guard dashboard (boards: Dashboard 2D, Dashboard 3D; W7, B4, B6, X1): filter bar, KPIs, the map with
 // layers / 2D-3D / time-lapse, hotspots, emerging issues, categories, reports per day and the ward comparison.
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useMemo, useRef, useState } from "react";
 import { DayBars, HBars } from "../components/charts.jsx";
 import { Icon } from "../components/icons.jsx";
-import { COLUMN_STEPS, MapControls } from "../components/MapControls.jsx";
+import { COLUMN_STEPS, HEAT_STOPS, MapControls } from "../components/MapControls.jsx";
 import { ReportDialog } from "../components/Report.jsx";
 import { Shell } from "../components/Shell.jsx";
 import { Checkbox, ErrorState, Segmented, Select, Skeleton, cx } from "../components/ui.jsx";
@@ -48,7 +48,7 @@ function SideHead({ children }) {
 
 function LayerChip({ on, onClick, children }) {
   return (
-    <button onClick={onClick} aria-pressed={on} className={cx("min-h-10 rounded-full border-[1.5px] px-4 text-[15px] font-bold", on ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink")}>
+    <button onClick={onClick} aria-pressed={on} className={cx("min-h-11 rounded-full border-[1.5px] px-4 text-[15px] font-bold", on ? "border-primary bg-primary text-on-primary" : "border-line bg-surface text-ink")}>
       {children}
     </button>
   );
@@ -60,7 +60,8 @@ export default function Dashboard() {
   const { query } = useRoute();
   const [f, setF] = useState(DEFAULTS);
   const [mode, setMode] = useState("2d");
-  const [layers, setLayers] = useState({ markers: false, clusters: true, heat: true, hotspots: true });
+  // The heat map is what you see first (busiest places glow red, with number badges); clusters are one tap away.
+  const [layers, setLayers] = useState({ markers: false, clusters: false, heat: true, hotspots: true });
   const [weight, setWeight] = useState(false);
   const [until, setUntil] = useState(null);
   const [playing, setPlaying] = useState(false);
@@ -221,7 +222,7 @@ export default function Dashboard() {
         )}
       </section>
 
-      <div className="mt-6 grid gap-8 xl:grid-cols-[1fr_340px]">
+      <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-8 xl:grid-cols-[minmax(0,1fr)_340px]">
         {/* Map card */}
         <section className="overflow-hidden rounded-2xl border border-line/80 bg-surface">
           <div className="flex flex-wrap items-center gap-2.5 border-b border-line/70 px-4 py-3">
@@ -301,42 +302,7 @@ export default function Dashboard() {
                 {liveTag}
               </span>
             )}
-            <div className="absolute bottom-4 left-4 z-10 max-w-[300px] rounded-xl border border-line/80 bg-surface/95 p-3.5 text-sm shadow-1">
-              {mode === "2d" ? (
-                <>
-                  <p className="font-bold">Legend</p>
-                  <ul className="mt-2 space-y-1.5">
-                    <li className="flex items-center gap-2">
-                      <span className="flex h-2.5 w-24 overflow-hidden rounded-sm">
-                        <span className="flex-1 bg-[#86c8c8]" />
-                        <span className="flex-1 bg-[#357575]" />
-                        <span className="flex-1 bg-[#1c3d3d]" />
-                      </span>
-                      Density of reports
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="h-3.5 w-5 rounded-sm border-2 border-dashed border-warn" /> Hotspot area (last 30 days)
-                    </li>
-                    <li className="flex items-center gap-2">
-                      <span className="size-3.5 rounded-full bg-[#1c3d3d]" /> Cluster (number of reports)
-                    </li>
-                  </ul>
-                  <p className="mt-2 text-primary">Not proof of a problem. Open a report to see its evidence.</p>
-                </>
-              ) : (
-                <>
-                  <p className="font-bold">How to read this</p>
-                  <p className="mt-1">Each column is one 250 m square. Taller and darker means more credible reports.</p>
-                  <p className="mt-2 flex items-center gap-1.5">
-                    {COLUMN_STEPS.map(([, c]) => (
-                      <span key={c} className="h-3 w-6 rounded-sm" style={{ background: c }} />
-                    ))}
-                    <span className="num ml-1">1 to 11+</span>
-                  </p>
-                  <p className="mt-2 text-primary">Hotspot outlines show in the 2D view.</p>
-                </>
-              )}
-            </div>
+            <MapLegend mode={mode} />
           </div>
           {mode === "2d" && (
             <div className="flex flex-wrap items-center gap-4 border-t border-line/70 px-4 py-3">
@@ -412,7 +378,7 @@ export default function Dashboard() {
         </aside>
       </div>
 
-      <div className="mt-10 grid gap-10 lg:grid-cols-2">
+      <div className="mt-10 grid grid-cols-[minmax(0,1fr)] gap-10 lg:grid-cols-2">
         <section>
           <SideHead>{f.status === "credible" ? "Credible reports per day" : "Reports per day"}</SideHead>
           <div className="mt-4">{s ? <DayBars data={s.trend.slice(-Math.min(s.trend.length, f.period === "year" ? 60 : 31))} /> : <Skeleton className="h-40" />}</div>
@@ -449,3 +415,68 @@ export default function Dashboard() {
   );
 }
 
+// The legend starts as a small chip so the map stays clear; a tap opens the full key, another tap (or Escape)
+// closes it. The ramp is the heat map's own colours (HEAT_STOPS), so the key can't drift from the map.
+const HEAT_RAMP = `linear-gradient(90deg, ${HEAT_STOPS.slice(1).map(([at, c]) => `${c.replace(/[\d.]+\)$/, "1)")} ${Math.round(at * 100)}%`).join(", ")})`;
+function MapLegend({ mode }) {
+  const [open, setOpen] = useState(false);
+  const panel = useId();
+  return (
+    <div className="absolute bottom-4 left-4 z-10 max-w-[300px] text-sm" onKeyDown={(e) => e.key === "Escape" && setOpen(false)}>
+      {open && (
+        <div id={panel} className="cp-legend-in mb-2 rounded-xl border border-line/80 bg-surface/95 p-3.5 shadow-1">
+          {mode === "2d" ? (
+            <>
+              <p className="flex items-center gap-2">
+                <span className="h-2.5 w-24 shrink-0 rounded-full" style={{ background: HEAT_RAMP }} />
+                Few → many credible reports
+              </p>
+              <ul className="mt-2 space-y-1.5">
+                <li className="flex items-center gap-2">
+                  <span className="cp-heat-badge pointer-events-none !h-6 !min-w-6 !border-2 !px-1 !text-xs">9</span> Busiest spots (tap to zoom in)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="h-3.5 w-5 rounded-sm border-2 border-dashed border-warn" /> Hotspot area (last 30 days)
+                </li>
+                <li className="flex items-center gap-2">
+                  <span className="size-3.5 rounded-full bg-[#1c3d3d]" /> Cluster (number of reports)
+                </li>
+              </ul>
+              <p className="mt-2 text-primary">Red means busiest in this view, not proof of a problem. Open a report to see its evidence.</p>
+            </>
+          ) : (
+            <>
+              <p className="mt-0">Each column is one 250 m square. Taller and darker means more credible reports.</p>
+              <p className="mt-2 flex items-center gap-1.5">
+                {COLUMN_STEPS.map(([, c]) => (
+                  <span key={c} className="h-3 w-6 rounded-sm" style={{ background: c }} />
+                ))}
+                <span className="num ml-1">1 to 11+</span>
+              </p>
+              <p className="mt-2 text-primary">Hotspot outlines show in the 2D view.</p>
+            </>
+          )}
+        </div>
+      )}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        aria-controls={open ? panel : undefined}
+        className="press flex min-h-11 items-center gap-2 rounded-full border border-line/80 bg-surface/95 px-3.5 font-bold shadow-1 hover:bg-surface"
+      >
+        {mode === "2d" ? (
+          <span className="h-2.5 w-10 rounded-full" style={{ background: HEAT_RAMP }} aria-hidden />
+        ) : (
+          <span className="flex gap-0.5" aria-hidden>
+            {COLUMN_STEPS.slice(0, 3).map(([, c]) => (
+              <span key={c} className="h-2.5 w-2.5 rounded-sm" style={{ background: c }} />
+            ))}
+          </span>
+        )}
+        {mode === "2d" ? "Legend" : "How to read this"}
+        <Icon name="chevronDown" className={cx("size-4 transition-transform duration-200", open && "rotate-180")} />
+      </button>
+    </div>
+  );
+}
