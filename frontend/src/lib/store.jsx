@@ -1,6 +1,6 @@
 // Session and app-wide state: the signed-in user, toasts, online status and live notification counts.
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { api, clearPhotoCache, lastLoadedAt, onToken, refresh, setToken } from "./api.js";
+import { api, clearPhotoCache, lastLoadedAt, onToken, readDataCache, refresh, setToken, writeDataCache } from "./api.js";
 import { fmtTime } from "./format.js";
 import { openStream } from "./stream.js";
 
@@ -105,19 +105,42 @@ export function AppProvider({ children }) {
 }
 
 // Small data hook: loads once (and again when `deps` change); exposes loading / error / reload.
-export function useData(loader, deps = []) {
-  const [state, setState] = useState({ data: null, error: null, loading: true });
+// With a `key`, the last answer is kept in memory (lib/api.js): a revisit shows it at once, with no skeleton, and
+// is refreshed in the background (stale-while-revalidate). An identical answer doesn't re-render anything.
+export function useData(loader, deps = [], key = null) {
+  const [state, setState] = useState(() => {
+    const cached = key ? readDataCache(key) : undefined;
+    return cached !== undefined ? { data: cached, error: null, loading: false } : { data: null, error: null, loading: true };
+  });
   const [n, setN] = useState(0);
+  const first = useRef(true);
   useEffect(() => {
     let alive = true;
-    setState((s) => ({ ...s, loading: true, error: null }));
+    const cached = key ? readDataCache(key) : undefined;
+    if (cached !== undefined) {
+      if (!first.current) setState({ data: cached, error: null, loading: false }); // deps changed to a cached key
+    } else setState((s) => ({ ...s, loading: true, error: null }));
+    first.current = false;
     loader()
-      .then((data) => alive && setState({ data, error: null, loading: false }))
-      .catch((error) => alive && setState({ data: null, error, loading: false }));
+      .then((data) => {
+        if (key) writeDataCache(key, data);
+        if (!alive) return;
+        setState((s) => (s.data !== null && !s.loading && !s.error && same(s.data, data) ? s : { data, error: null, loading: false }));
+      })
+      .catch((error) => alive && setState((s) => (cached !== undefined && error?.status === 0 ? s : { data: null, error, loading: false })));
     return () => {
       alive = false;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [...deps, n]);
+  }, [...deps, n, key]);
   return { ...state, reload: () => setN((x) => x + 1), setData: (data) => setState((s) => ({ ...s, data })) };
+}
+
+// Cheap deep-equality for JSON answers (a few KB): keeps a background refresh with no news from re-rendering.
+function same(a, b) {
+  try {
+    return JSON.stringify(a) === JSON.stringify(b);
+  } catch {
+    return false;
+  }
 }

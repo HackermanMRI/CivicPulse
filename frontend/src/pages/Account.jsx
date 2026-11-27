@@ -90,7 +90,7 @@ export function Alerts() {
   const { module, key } = useModuleRoute();
   const [tab, setTab] = useState("alerts");
   const [open, setOpen] = useState(null);
-  const { data, error, loading, reload, setData } = useData(() => api("/api/notifications", { query: { tab, module: key } }), [tab, key, live?.id]);
+  const { data, error, loading, reload, setData } = useData(() => api("/api/notifications", { query: { tab, module: key } }), [tab, key, live?.id], `notifications:${tab}:${key}`);
 
   async function read(n) {
     if (!n.read) {
@@ -299,8 +299,8 @@ export function Profile() {
   const [dialog, setDialog] = useState(null); // rep | perm | lang | edit | photo
   const [tab, setTab] = useState("overview");
   const type = module === "pp" ? "price" : "civic";
-  const mine = useData(() => api("/api/me/reports", { query: { type, limit: 3 } }), [type]);
-  const cats = useData(() => api("/api/categories"), []);
+  const mine = useData(() => api("/api/me/reports", { query: { type, limit: 3 } }), [type], `my-reports:${type}:3`);
+  const cats = useData(() => api("/api/categories"), [], "categories");
   const load = useCallback(() => api("/api/me").then(setMe).catch(setError), []);
   useEffect(() => {
     load();
@@ -456,7 +456,7 @@ export function MyReports() {
   const { module } = useModuleRoute();
   const [type, setType] = useState(module === "pp" ? "price" : "civic");
   const [open, setOpen] = useState(null);
-  const { data, error, loading, reload } = useData(() => api("/api/me/reports", { query: { type } }), [type]);
+  const { data, error, loading, reload } = useData(() => api("/api/me/reports", { query: { type } }), [type], `my-reports:${type}`);
   return (
     <Shell module={module} title="My reports">
       <BackTitle title="My reports" />
@@ -498,7 +498,7 @@ export function EditAreas() {
   const { module } = useModuleRoute();
   const [addresses, setAddresses] = useState(null);
   const [busy, setBusy] = useState(false);
-  const wards = useData(() => api("/api/wards"), []);
+  const wards = useData(() => api("/api/wards"), [], "wards");
   useEffect(() => {
     api("/api/me/addresses").then(setAddresses).catch((e) => toast(e.message, "error"));
   }, [toast]);

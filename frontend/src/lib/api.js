@@ -30,6 +30,7 @@ export function deviceId() {
 }
 
 export function setToken(token) {
+  if (!token) dataCache.clear(); // signed out: nothing of the last person's screens stays in memory
   accessToken = token;
   listeners.forEach((fn) => fn(token));
 }
@@ -64,7 +65,11 @@ export async function refresh() {
 
 export async function api(path, { method = "GET", body, form, query, retry = true, signal } = {}) {
   const url = new URL(path, location.origin);
-  if (query) Object.entries(query).forEach(([k, v]) => v !== undefined && v !== null && v !== "" && url.searchParams.set(k, v));
+  if (query)
+    Object.entries(query).forEach(([k, v]) => {
+      if (Array.isArray(v)) v.forEach((x) => url.searchParams.append(k, x)); // ?ward_id=1&ward_id=2
+      else if (v !== undefined && v !== null && v !== "") url.searchParams.set(k, v);
+    });
   const headers = { "X-Device-Id": deviceId() };
   if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
   let payload;
@@ -101,9 +106,25 @@ export async function api(path, { method = "GET", body, form, query, retry = tru
   } catch {
     data = null;
   }
+  // Any change (vote, pin, profile edit, …) may change what a cached screen shows, so the screen cache is dropped.
+  if (method !== "GET") clearDataCache();
   if (!res.ok) throw new ApiError(res.status, message(data, res.status), data);
   if (method === "GET") lastLoaded = new Date();
   return data;
+}
+
+// Screen data cache (stale-while-revalidate). Going back to a tab shows what it showed last time at once, then
+// refreshes it in the background. Memory only (never localStorage): it is dropped on sign-out and after any change.
+const dataCache = new Map(); // key -> data
+const DATA_CACHE_MAX = 80;
+export const readDataCache = (key) => dataCache.get(key);
+export function writeDataCache(key, data) {
+  dataCache.delete(key);
+  dataCache.set(key, data);
+  if (dataCache.size > DATA_CACHE_MAX) dataCache.delete(dataCache.keys().next().value); // oldest first
+}
+export function clearDataCache() {
+  dataCache.clear();
 }
 
 // Photos are behind authorisation, so <img src> cannot load them directly; fetch them as blobs.

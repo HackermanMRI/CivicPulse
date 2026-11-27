@@ -8,7 +8,7 @@ import { Icon, categoryIcon } from "../components/icons.jsx";
 import { ReportCard, ReportDialog, catStyle } from "../components/Report.jsx";
 import { Shell } from "../components/Shell.jsx";
 import { Button, CardSkeleton, ErrorState, FormHeader, StateBlock, StepBar, cx, textareaCls, useNow } from "../components/ui.jsx";
-import { api, photoUrlSync } from "../lib/api.js";
+import { api, photoUrlSync, readDataCache, writeDataCache } from "../lib/api.js";
 import { enter, exit, pop, stagger } from "../lib/motion.js";
 import { fmtLongStamp, fmtTime } from "../lib/format.js";
 import { getPosition } from "../lib/geo.js";
@@ -16,7 +16,7 @@ import { Link, navigate } from "../lib/router.jsx";
 import { useApp, useData } from "../lib/store.jsx";
 
 function useCategories() {
-  return useData(() => api("/api/categories"), []);
+  return useData(() => api("/api/categories"), [], "categories");
 }
 
 export function CardList({ items, setItems, onPin }) {
@@ -49,13 +49,20 @@ export function CardList({ items, setItems, onPin }) {
   return (
     <>
       <div className="grid gap-5">
-        {items.map((r, i) => (
-          // Stagger 40 ms, at most 6 items (motion tokens); later pages appear without delay. Cards further down
-          // rise in as they scroll into view (CSS scroll-driven, where supported).
-          <m.div key={r.id} className={i > 1 ? "cp-rise" : undefined} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={stagger(i % 10)}>
-            <ReportCard report={r} onOpen={openReport} onSaved={onSaved} vtName={vtId === r.id ? "report-photo" : undefined} />
-          </m.div>
-        ))}
+        {items.map((r, i) =>
+          // The first 6 cards of each page stagger in (40 ms apart, motion tokens), as before. The rest don't animate on mount; they
+          // rise in as they scroll into view (CSS scroll-driven, where supported) and, while off screen, skip
+          // style/layout/paint entirely (content-visibility), so a long feed costs about as much as one screen.
+          i % 10 < 6 ? (
+            <m.div key={r.id} className={i > 1 ? "cp-rise" : undefined} initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={stagger(i % 10)}>
+              <ReportCard report={r} onOpen={openReport} onSaved={onSaved} vtName={vtId === r.id ? "report-photo" : undefined} />
+            </m.div>
+          ) : (
+            <div key={r.id} className="cp-lazy-card cp-rise">
+              <ReportCard report={r} onOpen={openReport} onSaved={onSaved} vtName={vtId === r.id ? "report-photo" : undefined} />
+            </div>
+          ),
+        )}
       </div>
       <ReportDialog id={open?.id} initialMode={open?.mode} focus={open?.focus} seed={open?.seed} instant={open?.instant} onClose={() => setOpen(null)} onChanged={(full) => replace(full)} />
     </>
@@ -81,16 +88,8 @@ function PinnedBar({ count }) {
 // a place"). The line draws itself once, then a bright blip keeps running along it. Numbers are aggregates for the
 // whole area (shown to everyone signed in, X1), never one report's result.
 function AreaPulse({ wards, names }) {
-  const week = useData(
-    () =>
-      wards.length
-        ? Promise.all(wards.map((w) => api("/api/insights/summary", { query: { days: 7, ward_id: w, status: "all", show_resolved: true } }))).then((all) => ({
-            reports: all.reduce((n, x) => n + (x.in_view || 0), 0),
-            fixed: all.reduce((n, x) => n + (x.resolved_events || 0), 0),
-          }))
-        : Promise.resolve(null),
-    [wards.join(",")],
-  );
+  // One request for all of the person's wards (it used to be one /summary request per ward).
+  const week = useData(() => (wards.length ? api("/api/insights/pulse", { query: { ward_id: wards, days: 7 } }) : Promise.resolve(null)), [wards.join(",")], `pulse:${wards.join(",")}`);
   const title = names.length === 1 ? names[0] : names.length > 1 ? `Your ${names.length} areas` : "Your area";
   const path = "M0 22 H70 L80 22 L88 6 L98 34 L106 14 L114 22 H170 L178 22 L184 12 L192 30 L198 22 H260";
   return (
@@ -129,7 +128,7 @@ function AreaPulse({ wards, names }) {
 
 // Swipeable hotspots in the person's areas (public aggregates). Tap → the dashboard map at that spot.
 function HotspotRail({ wards }) {
-  const hs = useData(() => api("/api/insights/hotspots"), []);
+  const hs = useData(() => api("/api/insights/hotspots"), [], "hotspots");
   const mine = (hs.data || []).filter((h) => h.ward && wards.includes(h.ward.id)).slice(0, 8);
   if (!mine.length) return null;
   return (
@@ -259,27 +258,31 @@ function PullIndicator({ pull, busy }) {
 
 export function Feed() {
   const { user, live } = useApp();
-  const [items, setItems] = useState([]);
-  const [cursor, setCursor] = useState(null);
-  const [state, setState] = useState({ loading: true, error: null, wards: [] });
-  const pinned = useData(() => api("/api/me/saved"), []);
+  // The first page is kept in the screen cache: coming back to the feed shows it at once and refreshes it quietly.
+  const cachedFirst = readDataCache("feed:first");
+  const [items, setItems] = useState(() => cachedFirst?.items || []);
+  const [cursor, setCursor] = useState(() => cachedFirst?.next_cursor || null);
+  const [state, setState] = useState(() => ({ loading: !cachedFirst, error: null, wards: cachedFirst?.wards || [] }));
+  const pinned = useData(() => api("/api/me/saved"), [], "saved");
   const sentinel = useRef(null);
   const [fresh, setFresh] = useState(0);
 
-  async function load(reset) {
-    setState((s) => ({ ...s, loading: true, error: null }));
+  async function load(reset, quiet = false) {
+    if (!quiet) setState((s) => ({ ...s, loading: true, error: null }));
     try {
       const res = await api("/api/feed", { query: { cursor: reset ? undefined : cursor } });
+      if (reset) writeDataCache("feed:first", res);
       setItems((prev) => (reset ? res.items : [...prev, ...res.items]));
       setCursor(res.next_cursor);
       setState({ loading: false, error: null, wards: res.wards });
       if (reset) setFresh(0);
     } catch (error) {
-      setState((s) => ({ ...s, loading: false, error }));
+      // A quiet refresh that fails (offline) keeps the cached page on screen instead of an error.
+      setState((s) => (quiet && error?.status === 0 ? { ...s, loading: false } : { ...s, loading: false, error }));
     }
   }
   useEffect(() => {
-    load(true);
+    load(true, Boolean(cachedFirst));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -309,7 +312,10 @@ export function Feed() {
 
   const [pinDelta, setPinDelta] = useState(0);
   const pinnedCount = pinned.data ? pinned.data.length + pinDelta : null;
-  const names = (user?.addresses || []).filter((a) => state.wards.includes(a.ward_id)).map((a) => a.ward_name_en);
+  // The header (area pulse, hotspots) needs only the person's wards, which are already in memory (`user`), so it
+  // loads in parallel with the feed instead of waiting for the feed's answer. The feed answer wins once it's here.
+  const wards = state.wards.length ? state.wards : [...new Set((user?.addresses || []).map((a) => a.ward_id).filter(Boolean))];
+  const names = (user?.addresses || []).filter((a) => wards.includes(a.ward_id)).map((a) => a.ward_name_en);
   const uniqueNames = [...new Set(names)];
 
   return (
@@ -323,8 +329,8 @@ export function Feed() {
       />
       <div className="relative" style={{ transform: ptr.pull ? `translateY(${ptr.pull * 0.6}px)` : undefined, transition: ptr.pull ? "none" : "transform 220ms cubic-bezier(0.2,0,0,1)" }}>
         <PullIndicator pull={ptr.pull} busy={ptr.busy} />
-        {state.wards.length > 0 && <AreaPulse wards={state.wards} names={uniqueNames} />}
-        {state.wards.length > 0 && <HotspotRail wards={state.wards} />}
+        {wards.length > 0 && <AreaPulse wards={wards} names={uniqueNames} />}
+        {wards.length > 0 && <HotspotRail wards={wards} />}
         <PinnedBar count={pinnedCount} />
         {state.error && items.length === 0 && <ErrorState error={state.error} onRetry={() => load(true)} title="Couldn't load the feed" note="Your pinned reports are still saved." />}
         {!state.error && state.loading && items.length === 0 && (
@@ -374,7 +380,7 @@ function useCallbackRef(ref) {
 }
 
 export function Pinned() {
-  const { data, error, loading, reload, setData } = useData(() => api("/api/me/saved"), []);
+  const { data, error, loading, reload, setData } = useData(() => api("/api/me/saved"), [], "saved");
   return (
     <Shell module="gg" title="Pinned Reports">
       <div className="mb-4 flex items-center gap-2">

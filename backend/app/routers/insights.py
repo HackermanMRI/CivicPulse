@@ -143,6 +143,20 @@ def summary(days: int = Query(30, ge=1, le=366), start: date | None = None, cate
     }
 
 
+@router.get("/pulse")
+def pulse(ward_id: list[int] = Query(..., min_length=1, max_length=10), days: int = Query(7, ge=1, le=90),
+          user: User = Depends(current_user), db: Session = Depends(get_db)):
+    """The feed header's numbers for several wards in one request (it used to call /summary once per ward):
+    all visible civic reports in the window, and how many of their events were fixed in it. Aggregates only (X1)."""
+    since, until = _window(days, None, None)
+    q = _civic(db, since, until, None, None).filter(Report.ward_id.in_(set(ward_id)))
+    reports = q.count()
+    fixed = (q.join(Event, Event.id == Report.event_id)
+             .filter(Event.resolved_at.isnot(None), Event.resolved_at >= since)
+             .with_entities(func.count(func.distinct(Report.event_id))).scalar())
+    return {"days": days, "reports": reports, "fixed": fixed or 0}
+
+
 def _ward_table(db: Session, since, until, category: str | None, cats: list[Category]) -> list[dict]:
     """Ward comparison: credible reports, share of them resolved, and the most common category."""
     names = {c.id: c.name_en for c in cats}

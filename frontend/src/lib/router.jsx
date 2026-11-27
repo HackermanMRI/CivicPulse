@@ -1,4 +1,9 @@
-// A tiny history router (no dependency). Route changes use the View Transitions API when the browser has it.
+// A tiny history router (no dependency).
+// Route changes switch at once. They used to run inside document.startViewTransition, but React renders the new page
+// in a later task, so the browser cross-faded the OLD page into itself for ~250–300 ms before the new page even began
+// to render (and paid a full style pass to snapshot it). The new page now fades in with a CSS animation on <main>
+// (.cp-page-in), which never delays rendering. The card → pop-up photo still uses a View Transition (it renders
+// synchronously inside it, see GreenGuard.jsx).
 import { createContext, useContext, useEffect, useState } from "react";
 
 const RouterCtx = createContext({ path: "/", query: new URLSearchParams() });
@@ -29,14 +34,9 @@ export const moduleFromPath = (path) => (path.startsWith("/pp") ? "pp" : "gg");
 export const MODULE_KEY = { gg: "green_guard", pp: "price_patrol" };
 
 export function navigate(to, { replace = false } = {}) {
-  const go = () => {
-    history[replace ? "replaceState" : "pushState"](null, "", to);
-    window.dispatchEvent(new Event("cp:navigate"));
-    window.scrollTo({ top: 0 });
-  };
-  const reduce = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
-  if (document.startViewTransition && !reduce) document.startViewTransition(go);
-  else go();
+  history[replace ? "replaceState" : "pushState"](null, "", to);
+  window.dispatchEvent(new Event("cp:navigate"));
+  window.scrollTo({ top: 0 });
 }
 
 export function Link({ to, children, className, replace, ...rest }) {

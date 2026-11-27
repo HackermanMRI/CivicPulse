@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     COOKIE_SECURE: bool = True                      # refresh cookie only over HTTPS (localhost counts as secure in browsers)
     MODELS_DIR: str = "/models"
     STATIC_DIR: str | None = None                   # serve the built frontend from the API (local runs without nginx)
+    # Database connections per API worker process. Total = API_WORKERS × (DB_POOL_SIZE + DB_MAX_OVERFLOW) and must
+    # stay under Postgres max_connections (100 by default) together with the worker and scheduler.
+    DB_POOL_SIZE: int = Field(5, ge=1, le=50)
+    DB_MAX_OVERFLOW: int = Field(10, ge=0, le=50)
 
 
 @lru_cache

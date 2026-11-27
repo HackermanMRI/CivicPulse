@@ -8,7 +8,7 @@ import * as RTabs from "@radix-ui/react-tabs";
 import * as RToast from "@radix-ui/react-toast";
 import * as RTooltip from "@radix-ui/react-tooltip";
 import { AnimatePresence, m, useDragControls } from "motion/react";
-import { Children, createContext, isValidElement, useContext, useEffect, useId, useState } from "react";
+import { Children, createContext, isValidElement, useCallback, useContext, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { photoUrl, photoUrlSync } from "../lib/api.js";
 import { EASE_ENTER, EASE_EXIT, enter, exit, pop, spring, springSoft } from "../lib/motion.js";
 import { STATUS } from "../lib/format.js";
@@ -222,7 +222,7 @@ export function Toasts() {
           return (
             <RToast.Root key={t.id} asChild forceMount type={t.kind === "error" ? "foreground" : "background"} duration={4500} onOpenChange={(open) => !open && dismiss(t.id)}>
               <m.li
-                layout
+                layout="position"
                 initial={{ opacity: 0, y: 24, scale: 0.96 }}
                 animate={{ opacity: 1, y: 0, scale: 1, transition: spring }}
                 exit={{ opacity: 0, y: 12, scale: 0.98, transition: exit() }}
@@ -469,10 +469,43 @@ export function Select({ className, children, compact, value, onChange, id, disa
 }
 
 // Segmented control (7 days / 30 days / This year, 2D / 3D, 30 / 90 days). The selected pill slides between options.
+// The selected pill slides between options. One indicator for the row, placed with offsetLeft/offsetWidth of the
+// chosen button (relative to the row, so scrolling doesn't matter) and moved with a CSS transform. It is measured
+// after the first paint (free) and on a choice (the page is already laid out then), never during a page switch, so
+// it doesn't cost what Motion's layoutId did. Until it is measured the chosen button paints its own colour.
 export function Segmented({ options, value, onChange, label, className, dark }) {
-  const id = useId();
+  const row = useRef(null);
+  const [pos, setPos] = useState(null);
+  const index = options.findIndex((o) => o.value === value);
+  const measure = useCallback(() => {
+    const b = row.current?.querySelector('[aria-checked="true"]');
+    setPos(b ? { x: b.offsetLeft, w: b.offsetWidth } : null);
+  }, []);
+  useEffect(() => {
+    let f2 = 0;
+    const f1 = requestAnimationFrame(() => (f2 = requestAnimationFrame(measure)));
+    const ro = "ResizeObserver" in window ? new ResizeObserver(() => measure()) : null;
+    if (ro && row.current) ro.observe(row.current);
+    return () => {
+      cancelAnimationFrame(f1);
+      cancelAnimationFrame(f2);
+      ro?.disconnect();
+    };
+  }, [measure]);
+  useLayoutEffect(() => {
+    if (pos) measure();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [index]);
+  const fill = dark ? "bg-inverse" : "bg-primary";
   return (
-    <div role="radiogroup" aria-label={label} className={cx("inline-flex rounded-xl border border-hair bg-surface p-1", className)}>
+    <div ref={row} role="radiogroup" aria-label={label} className={cx("relative inline-flex rounded-xl border border-hair bg-surface p-1", className)}>
+      {pos && (
+        <span
+          aria-hidden
+          className={cx("pointer-events-none absolute bottom-1 left-0 top-1 rounded-lg transition-[transform,width] duration-300 ease-[cubic-bezier(0.2,0,0,1)]", fill)}
+          style={{ width: pos.w, transform: `translateX(${pos.x}px)` }}
+        />
+      )}
       {options.map((o) => {
         const on = value === o.value;
         return (
@@ -481,10 +514,12 @@ export function Segmented({ options, value, onChange, label, className, dark }) 
             role="radio"
             aria-checked={on}
             onClick={() => onChange(o.value)}
-            className={cx("relative min-h-10 rounded-lg px-3.5 text-[15px] font-bold transition-colors duration-150", on ? (dark ? "text-on-inverse" : "text-on-primary") : "text-ink hover:bg-soft/50")}
+            className={cx(
+              "relative min-h-10 rounded-lg px-3.5 text-[15px] font-bold transition-colors duration-200",
+              on ? cx(dark ? "text-on-inverse" : "text-on-primary", !pos && fill) : "text-ink hover:bg-soft/50",
+            )}
           >
-            {on && <m.span layoutId={`seg-${id}`} className={cx("absolute inset-0 rounded-lg", dark ? "bg-inverse" : "bg-primary")} transition={spring} />}
-            <span className="relative">{o.label}</span>
+            {o.label}
           </button>
         );
       })}
@@ -495,14 +530,21 @@ export function Segmented({ options, value, onChange, label, className, dark }) 
 // Tabs with counts (Radix Tabs: arrow keys move between tabs). Pass the panel as children so the tab and its
 // panel are linked for screen readers.
 export function Tabs({ tabs, value, onChange, className, label, children }) {
+  // One indicator under equal-width tabs, moved with a CSS transform (no layout measuring; see Segmented).
+  const index = Math.max(0, tabs.findIndex((t) => t.value === value));
+  const n = tabs.length;
   return (
     <RTabs.Root value={value} onValueChange={onChange} activationMode="automatic">
-      <RTabs.List aria-label={label} className={cx("grid auto-cols-fr grid-flow-col gap-1 rounded-2xl border border-hair bg-surface p-1 shadow-1", className)}>
+      <RTabs.List aria-label={label} className={cx("relative grid auto-cols-fr grid-flow-col gap-1 rounded-2xl border border-hair bg-surface p-1 shadow-1", className)}>
+        <span
+          aria-hidden
+          className="pointer-events-none absolute bottom-1 left-1 top-1 rounded-xl bg-primary transition-transform duration-300 ease-[cubic-bezier(0.2,0,0,1)]"
+          style={{ width: `calc((100% - 8px - ${(n - 1) * 4}px) / ${n})`, transform: `translateX(calc(${index} * (100% + 4px)))` }}
+        />
         {tabs.map((t) => {
           const on = value === t.value;
           return (
-            <RTabs.Trigger key={t.value} value={t.value} className={cx("relative flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-base font-bold", on ? "text-on-primary" : "text-ink hover:bg-soft/40")}>
-              {on && <m.span layoutId={`tab-${label || "tabs"}`} className="absolute inset-0 rounded-xl bg-primary" transition={spring} />}
+            <RTabs.Trigger key={t.value} value={t.value} className={cx("relative flex min-h-12 items-center justify-center gap-2 rounded-xl px-3 text-base font-bold transition-colors duration-200", on ? "text-on-primary" : "text-ink hover:bg-soft/40")}>
               <span className="relative">{t.label}</span>
               {t.badge ? (
                 <span className={cx("num relative grid h-6 min-w-6 place-items-center rounded-full px-1.5 text-[13px] font-bold", on ? "bg-on-primary text-primary" : "bg-err text-white")}>{t.badge}</span>
@@ -551,23 +593,34 @@ export function Switch({ checked, onChange, label, sub, id }) {
 // Photos fade in once loaded (no pop). A photo already loaded elsewhere (feed card → pop-up) shows on the first
 // frame, which the card → pop-up View Transition needs. `vtName` names it for that transition; `drift` lets it
 // move slightly while it crosses the screen (scroll-driven, transform only).
-export function Photo({ src, alt, className, placeholder = "No photo", children, vtName, drift = false, imgClassName }) {
+// Photos download only when they come within ~1.5 screens of view (IntersectionObserver), so opening a tab fetches
+// the data it needs first, not 20 photos at once. `eager` skips the wait (the pop-up's main photo).
+export function Photo({ src, alt, className, placeholder = "No photo", children, vtName, drift = false, imgClassName, eager = false }) {
   const [url, setUrl] = useState(() => photoUrlSync(src));
   const [failed, setFailed] = useState(false);
   const [loaded, setLoaded] = useState(() => Boolean(photoUrlSync(src)));
+  const [near, setNear] = useState(eager);
+  const box = useRef(null);
+  useEffect(() => {
+    if (near || !box.current) return undefined;
+    if (!("IntersectionObserver" in window)) return setNear(true);
+    const io = new IntersectionObserver((entries) => entries.some((e) => e.isIntersecting) && setNear(true), { rootMargin: "1200px 0px" });
+    io.observe(box.current);
+    return () => io.disconnect();
+  }, [near]);
   useEffect(() => {
     let alive = true;
     const ready = photoUrlSync(src);
     setUrl(ready);
     setLoaded(Boolean(ready));
     setFailed(false);
-    if (src && !ready) photoUrl(src).then((u) => alive && setUrl(u)).catch(() => alive && setFailed(true));
+    if (src && !ready && near) photoUrl(src).then((u) => alive && setUrl(u)).catch(() => alive && setFailed(true));
     return () => {
       alive = false;
     };
-  }, [src]);
+  }, [src, near]);
   return (
-    <div className={cx("relative overflow-hidden bg-soft", className)} style={vtName ? { viewTransitionName: vtName } : undefined}>
+    <div ref={box} className={cx("relative overflow-hidden bg-soft", className)} style={vtName ? { viewTransitionName: vtName } : undefined}>
       {!src || failed ? (
         <div className="grid size-full place-items-center gap-2 text-sm font-semibold text-primary">
           <span className="flex flex-col items-center gap-2">
