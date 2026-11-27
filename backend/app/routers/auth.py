@@ -196,7 +196,7 @@ def register(body: RegisterIn, request: Request, response: Response, db: Session
     existing = db.query(Device).filter_by(device_hash=dev_hash).first()
     if existing:
         _device_violation(db, existing, [existing.user_id], ip, "sign-up")
-        raise HTTPException(status_code=409, detail="This phone already has a CivicPulse account. One account per device.")
+        raise HTTPException(status_code=409, detail="This phone already has a CityPulse account. One account per device.")
     ward_ids = {a.ward_id for a in body.addresses if a.ward_id is not None}
     if ward_ids and db.query(Ward).filter(Ward.id.in_(ward_ids)).count() != len(ward_ids):
         raise HTTPException(status_code=422, detail="Choose wards from the pilot list.")
@@ -243,7 +243,7 @@ def login(body: LoginIn, request: Request, response: Response, db: Session = Dep
     dev = db.query(Device).filter_by(device_hash=dev_hash).first()
     if dev and dev.user_id != user.id:
         _device_violation(db, dev, [dev.user_id, user.id], ip, "login")
-        raise HTTPException(status_code=409, detail="This phone is linked to another CivicPulse account.")
+        raise HTTPException(status_code=409, detail="This phone is linked to another CityPulse account.")
     if dev is None:
         db.add(Device(user_id=user.id, device_hash=dev_hash, last_seen=now_utc()))
     else:
